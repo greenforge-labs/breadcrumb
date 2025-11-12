@@ -14,6 +14,9 @@
   <depend>launch</depend>
   <depend>launch_ros</depend>
   <depend>topic_tools</depend>
+  <depend>clingwrap</depend>
+
+  <exec_depend>python3-click</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
