@@ -52,7 +52,7 @@ class ActionClient:
 
 @dataclass
 class NodeInterface:
-    node: NodeInfo
+    info: NodeInfo
     publishers: List[Publisher] = field(default_factory=list)
     subscribers: List[Subscriber] = field(default_factory=list)
     services: List[Service] = field(default_factory=list)
@@ -77,7 +77,7 @@ def parse_node_interface(yaml_path: Path) -> NodeInterface:
 
     # Parse node info
     node_data = data.get("node", {})
-    node = NodeInfo(name=node_data["name"], package=node_data["package"], plugin=node_data.get("plugin"))
+    info = NodeInfo(name=node_data["name"], package=node_data["package"], plugin=node_data.get("plugin"))
 
     # Parse publishers
     publishers = [Publisher(topic=pub["topic"], type=pub["type"]) for pub in (data.get("publishers") or [])]
@@ -98,7 +98,7 @@ def parse_node_interface(yaml_path: Path) -> NodeInterface:
     action_clients = [ActionClient(name=act["name"], type=act["type"]) for act in (data.get("action_clients") or [])]
 
     return NodeInterface(
-        node=node,
+        info=info,
         publishers=publishers,
         subscribers=subscribers,
         services=services,

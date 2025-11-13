@@ -6,11 +6,11 @@ import sys
 import warnings
 
 import click
-from clingwrap.static_info import StaticInformation
+from clingwrap.static_info import ComposableNodeInfo, NodeInfo, StaticInformation
 
 from .helpers import LaunchFileSource, get_launch_file_sources_from_included_launch_files, get_package_name_from_path
 from .launch_parser import LaunchFileLoadError, get_launch_file_static_information
-from .node_interface import load_node_interface
+from .node_interface import NodeInterface, load_node_interface
 
 
 @click.command()
@@ -71,21 +71,25 @@ def main(launch_files: tuple[Path, ...]):
             click.echo(f"Error loading {launch_file.path.name}: {e}.", err=True)
             sys.exit(1)
 
-    pprint(static_infos, depth=4)
+    # pprint(static_infos, depth=4)
+
+    all_nodes: list[tuple[NodeInfo | ComposableNodeInfo, NodeInterface | None, LaunchFileSource]] = []
 
     for launch_source, static_info in static_infos:
-        for node in static_info.nodes:
+        nodes: list[NodeInfo | ComposableNodeInfo] = static_info.nodes + static_info.get_all_composable_nodes()
+
+        for node in nodes:
             try:
-                pprint(
-                    load_node_interface(
-                        node.package, executable=node.executable, launching_package=launch_source.package
-                    )
+                interface = load_node_interface(
+                    node.package,
+                    executable=node.executable if hasattr(node, "executable") else None,  # type: ignore
+                    plugin=node.plugin if hasattr(node, "plugin") else None,  # type: ignore
+                    launching_package=launch_source.package,
                 )
             except FileNotFoundError as e:
                 warnings.warn(str(e), UserWarning)
+                interface = None
 
-        for node in static_info.get_all_composable_nodes():
-            try:
-                pprint(load_node_interface(node.package, plugin=node.plugin, launching_package=launch_source.package))
-            except FileNotFoundError as e:
-                warnings.warn(str(e), UserWarning)
+            all_nodes.append((node, interface, launch_source))
+
+    # pprint(all_nodes, depth=4)
