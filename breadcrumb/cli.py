@@ -32,19 +32,26 @@ def main(launch_files: tuple[Path, ...]):
 
       breadcrumb /path/to/*.launch.py
     """
+
     # Configure warnings to display nicely with click
     def warning_handler(message, category, filename, lineno, file=None, line=None):
         click.secho(f"Warning: {message}", fg="yellow", err=True)
 
     warnings.showwarning = warning_handler
 
-    static_infos: list[tuple[Path, "StaticInformation"]] = []  # type: ignore
+    full_static_info = StaticInformation()
     for launch_file in launch_files:
         try:
             static_info = get_launch_file_static_information_recursive(launch_file)
-            static_infos.append((launch_file, static_info))
+            if static_info is None:
+                warnings.warn(
+                    f"Launch file {launch_file} is empty or cannot be parsed. Skipping.",
+                    UserWarning,
+                )
+                continue
+            full_static_info.merge(static_info)
         except LaunchFileLoadError as e:
             click.echo(f"Error loading {launch_file.name}: {e}", err=True)
             sys.exit(1)
 
-    pprint(static_infos, depth=4)
+    pprint(full_static_info, depth=4)
