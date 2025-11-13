@@ -8,6 +8,7 @@ import warnings
 import click
 from clingwrap.static_info import ComposableNodeInfo, NodeInfo, StaticInformation
 
+from .graph import build_graph
 from .helpers import LaunchFileSource, get_launch_file_sources_from_included_launch_files, get_package_name_from_path
 from .launch_parser import LaunchFileLoadError, get_launch_file_static_information
 from .node_interface import NodeInterface, load_node_interface
@@ -92,4 +93,18 @@ def main(launch_files: tuple[Path, ...]):
 
             all_nodes.append((node, interface, launch_source))
 
-    # pprint(all_nodes, depth=4)
+    # Build the denormalized graph
+    graph = build_graph(all_nodes)
+
+    # Display the graph
+    click.echo("=" * 80)
+    click.echo(f"Graph Analysis Complete")
+    click.echo("=" * 80)
+    click.echo(f"\nNodes: {len(graph.nodes)}")
+    click.echo(f"Topics: {len(graph.topics)}")
+    click.echo(f"Services: {len(graph.services)}")
+    click.echo(f"Actions: {len(graph.actions)}")
+    click.echo("\n" + "=" * 80)
+    click.echo("Detailed Graph Structure:")
+    click.echo("=" * 80)
+    pprint(graph, depth=4)
