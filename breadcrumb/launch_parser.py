@@ -2,7 +2,9 @@
 
 import importlib.util
 from pathlib import Path
+import warnings
 
+from ament_index_python.packages import get_package_share_directory
 from clingwrap.static_info import StaticInformation
 
 
@@ -12,7 +14,7 @@ class LaunchFileLoadError(Exception):
     pass
 
 
-def load_launch_file(launch_file_path: Path) -> StaticInformation:
+def get_launch_file_static_information(launch_file_path: Path) -> StaticInformation | None:
     """
     Load a ROS 2 launch file and extract its static information.
 
@@ -40,7 +42,11 @@ def load_launch_file(launch_file_path: Path) -> StaticInformation:
         raise LaunchFileLoadError(f"Launch file not found: {launch_file_path}")
 
     if not launch_file_path.suffix == ".py":
-        raise LaunchFileLoadError(f"Launch file must be a .py file: {launch_file_path}")
+        warnings.warn(
+            f"Launch file is not a .py file: {launch_file_path}. Skipping.",
+            UserWarning,
+        )
+        return None
 
     # Load the launch file as a Python module
     try:
@@ -72,14 +78,55 @@ def load_launch_file(launch_file_path: Path) -> StaticInformation:
 
     # Verify it's a clingwrap LaunchBuilder
     if not hasattr(launch_description, "get_static_information"):
-        raise LaunchFileLoadError(
+        warnings.warn(
             f"{launch_file_path.name} does not return a clingwrap LaunchBuilder. "
             "Breadcrumb requires launch files built with clingwrap for static analysis. "
-            "Regular launch files using LaunchDescription cannot be analyzed statically."
+            "Regular launch files using LaunchDescription cannot be analyzed statically. Skipping.",
+            UserWarning,
         )
+        return None
 
     # Extract and return static information
     try:
         return launch_description.get_static_information()
     except Exception as e:
         raise LaunchFileLoadError(f"Error extracting static information: {e}") from e
+
+
+def get_launch_file_static_information_recursive(
+    launch_file_path: Path, visited: set[Path] | None = None
+) -> StaticInformation | None:
+    if visited is None:
+        visited = set()
+
+    # Prevent circular includes
+    resolved_path = launch_file_path.resolve()
+    if resolved_path in visited:
+        return None
+    visited.add(resolved_path)
+
+    # Get base static info
+    static_info = get_launch_file_static_information(launch_file_path)
+
+    if static_info is None:
+        return None
+
+    # Recursively process each included launch file
+    launch_files_to_iterate = static_info.included_launch_files.copy()
+    for include in launch_files_to_iterate:
+        include_path = Path(get_package_share_directory(include.package)) / include.directory / include.launch_file
+
+        if include.namespace is not None:
+            warnings.warn(
+                f"Launch file {include_path.name} included by {launch_file_path} with namespace '{include.namespace}'. "
+                "This is currently not supported by breadcrumb and will be skipped.",
+                UserWarning,
+            )
+            continue
+
+        included_static_info = get_launch_file_static_information_recursive(include_path, visited)
+        if included_static_info is not None:
+            static_info.merge(included_static_info)
+            static_info.included_launch_files.remove(include)
+
+    return static_info
