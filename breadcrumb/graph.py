@@ -162,8 +162,23 @@ def apply_remappings(name: str, remappings: dict[Any, Any] | None) -> str:
     return name
 
 
+def _is_hidden(name: str) -> bool:
+    """
+    Check if a name represents a hidden entity (starts with underscore).
+
+    Args:
+        name: Name or FQN to check
+
+    Returns:
+        True if the last component starts with underscore
+    """
+    last_component = name.split("/")[-1]
+    return last_component.startswith("_")
+
+
 def build_graph(
     all_nodes: list[tuple[NodeInfo | ComposableNodeInfo, NodeInterface | None, LaunchFileSource]],
+    include_hidden: bool = False,
 ) -> Graph:
     """
     Denormalize all_nodes into a unified graph structure.
@@ -171,6 +186,7 @@ def build_graph(
     Args:
         all_nodes: List of tuples containing (node_info, interface, launch_source)
                    interface may be None for nodes without interface files
+        include_hidden: If False, filter out entities whose names start with underscore
 
     Returns:
         Graph object containing all nodes, topics, services, and actions
@@ -181,6 +197,9 @@ def build_graph(
     topics_dict: dict[str, Topic] = {}
     services_dict: dict[str, Service] = {}
     actions_dict: dict[str, Action] = {}
+
+    # Track hidden nodes to filter them from connections
+    hidden_nodes: set[str] = set()
 
     # First pass: Create all Node objects
     for node_info, interface, launch_source in all_nodes:
@@ -205,6 +224,11 @@ def build_graph(
 
         # Resolve fully qualified name
         fqn, resolved_name = resolve_node_fqn(node_name, namespace)
+
+        # Filter hidden nodes if not including them
+        if not include_hidden and _is_hidden(resolved_name):
+            hidden_nodes.add(fqn)
+            continue
 
         # Extract parameters (convert any Substitution objects to strings)
         parameters = {}
@@ -236,10 +260,14 @@ def build_graph(
 
         # Process publishers
         for pub in interface.publishers:
-            # Resolve topic name
-            resolved_topic = resolve_name(pub.topic, fqn, namespace)
             # Apply remappings
-            final_topic = apply_remappings(resolved_topic, remappings)
+            remapped_topic = apply_remappings(pub.topic, remappings)
+            # Resolve topic name
+            final_topic = resolve_name(remapped_topic, fqn, namespace)
+
+            # Skip hidden topics if not including them
+            if not include_hidden and _is_hidden(final_topic):
+                continue
 
             # Create or update Topic object
             if final_topic not in topics_dict:
@@ -248,10 +276,14 @@ def build_graph(
 
         # Process subscribers
         for sub in interface.subscribers:
-            # Resolve topic name
-            resolved_topic = resolve_name(sub.topic, fqn, namespace)
             # Apply remappings
-            final_topic = apply_remappings(resolved_topic, remappings)
+            remapped_topic = apply_remappings(sub.topic, remappings)
+            # Resolve topic name
+            final_topic = resolve_name(remapped_topic, fqn, namespace)
+
+            # Skip hidden topics if not including them
+            if not include_hidden and _is_hidden(final_topic):
+                continue
 
             # Create or update Topic object
             if final_topic not in topics_dict:
@@ -260,10 +292,14 @@ def build_graph(
 
         # Process services (providers)
         for svc in interface.services:
-            # Resolve service name
-            resolved_service = resolve_name(svc.name, fqn, namespace)
             # Apply remappings
-            final_service = apply_remappings(resolved_service, remappings)
+            remapped_service = apply_remappings(svc.name, remappings)
+            # Resolve service name
+            final_service = resolve_name(remapped_service, fqn, namespace)
+
+            # Skip hidden services if not including them
+            if not include_hidden and _is_hidden(final_service):
+                continue
 
             # Create or update Service object
             if final_service not in services_dict:
@@ -272,10 +308,14 @@ def build_graph(
 
         # Process service clients
         for svc_client in interface.service_clients:
-            # Resolve service name
-            resolved_service = resolve_name(svc_client.name, fqn, namespace)
             # Apply remappings
-            final_service = apply_remappings(resolved_service, remappings)
+            remapped_service = apply_remappings(svc_client.name, remappings)
+            # Resolve service name
+            final_service = resolve_name(remapped_service, fqn, namespace)
+
+            # Skip hidden services if not including them
+            if not include_hidden and _is_hidden(final_service):
+                continue
 
             # Create or update Service object
             if final_service not in services_dict:
@@ -284,10 +324,14 @@ def build_graph(
 
         # Process actions (servers)
         for act in interface.actions:
-            # Resolve action name
-            resolved_action = resolve_name(act.name, fqn, namespace)
             # Apply remappings
-            final_action = apply_remappings(resolved_action, remappings)
+            remapped_action = apply_remappings(act.name, remappings)
+            # Resolve action name
+            final_action = resolve_name(remapped_action, fqn, namespace)
+
+            # Skip hidden actions if not including them
+            if not include_hidden and _is_hidden(final_action):
+                continue
 
             # Create or update Action object
             if final_action not in actions_dict:
@@ -296,10 +340,14 @@ def build_graph(
 
         # Process action clients
         for act_client in interface.action_clients:
-            # Resolve action name
-            resolved_action = resolve_name(act_client.name, fqn, namespace)
             # Apply remappings
-            final_action = apply_remappings(resolved_action, remappings)
+            remapped_action = apply_remappings(act_client.name, remappings)
+            # Resolve action name
+            final_action = resolve_name(remapped_action, fqn, namespace)
+
+            # Skip hidden actions if not including them
+            if not include_hidden and _is_hidden(final_action):
+                continue
 
             # Create or update Action object
             if final_action not in actions_dict:

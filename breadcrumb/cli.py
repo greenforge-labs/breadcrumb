@@ -1,7 +1,7 @@
 """Command-line interface for breadcrumb."""
 
+import json
 from pathlib import Path
-from pprint import pprint
 import sys
 import warnings
 
@@ -12,6 +12,7 @@ from .graph import build_graph
 from .helpers import LaunchFileSource, get_launch_file_sources_from_included_launch_files, get_package_name_from_path
 from .launch_parser import LaunchFileLoadError, get_launch_file_static_information
 from .node_interface import NodeInterface, load_node_interface
+from .serialization import serialize_graph, serialize_to_dot
 
 
 @click.command()
@@ -21,7 +22,19 @@ from .node_interface import NodeInterface, load_node_interface
     required=True,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
-def main(launch_files: tuple[Path, ...]):
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output file to write the graph. Format determined by extension: .json, .dot",
+)
+@click.option(
+    "--include-hidden",
+    is_flag=True,
+    default=False,
+    help="Include entities whose names start with underscore (hidden by default)",
+)
+def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bool):
     """Static analysis tool for ROS 2 node graphs.
 
     Analyzes one or more clingwrap launch files and displays the discovered
@@ -34,6 +47,10 @@ def main(launch_files: tuple[Path, ...]):
       breadcrumb robot.launch.py sensors.launch.py navigation.launch.py
 
       breadcrumb /path/to/*.launch.py
+
+      breadcrumb my_robot.launch.py -o graph.json
+
+      breadcrumb my_robot.launch.py -o graph.dot
     """
 
     # Configure warnings to display nicely with click
@@ -94,7 +111,7 @@ def main(launch_files: tuple[Path, ...]):
             all_nodes.append((node, interface, launch_source))
 
     # Build the denormalized graph
-    graph = build_graph(all_nodes)
+    graph = build_graph(all_nodes, include_hidden=include_hidden)
 
     # Display the graph
     click.echo("=" * 80)
@@ -105,6 +122,22 @@ def main(launch_files: tuple[Path, ...]):
     click.echo(f"Services: {len(graph.services)}")
     click.echo(f"Actions: {len(graph.actions)}")
     click.echo("\n" + "=" * 80)
-    click.echo("Detailed Graph Structure:")
-    click.echo("=" * 80)
-    pprint(graph, depth=4)
+
+    if output:
+        # Detect format from file extension
+        suffix = output.suffix.lower()
+
+        if suffix == ".json":
+            graph_data = serialize_graph(graph)
+            with open(output, "w") as f:
+                json.dump(graph_data, f, indent=2)
+        elif suffix == ".dot":
+            dot_content = serialize_to_dot(graph)
+            with open(output, "w") as f:
+                f.write(dot_content)
+        else:
+            raise click.BadParameter(
+                f"Unsupported file extension: {suffix}. " f"Supported formats: .json, .dot, .mmd, .mermaid"
+            )
+
+        click.echo(f"Graph written to: {output}")
