@@ -188,10 +188,10 @@ def serialize_to_dot(graph: Graph) -> str:
             srv_id = _escape_dot_label(server.fqn)
             lines.append(f'  "{srv_id}" -> "{act_id}" [label="serve", style=dotted];')
 
-        # Connect action to clients
+        # Connect action to clients (with reversed arrow direction)
         for client in action.clients:
             client_id = _escape_dot_label(client.fqn)
-            lines.append(f'  "{act_id}" -> "{client_id}" [label="call", style=dotted];')
+            lines.append(f'  "{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];')
 
     lines.append("}")
     return "\n".join(lines)
