@@ -170,7 +170,7 @@ def serialize_to_dot(graph: Graph) -> str:
         # Connect service to clients
         for client in service.clients:
             client_id = _escape_dot_label(client.fqn)
-            lines.append(f'  "{svc_id}" -> "{client_id}" [label="call", style=dashed];')
+            lines.append(f'  "{svc_id}" -> "{client_id}" [label="call", style=dashed, dir=back];')
 
     lines.append("")
 
