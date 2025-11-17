@@ -205,12 +205,17 @@ def load_node_interface(
     if yaml_path is None and launching_package is not None:
         yaml_path = find_interface_in_package(launching_package, executable=executable, plugin=plugin)
 
+    # If still not found, try breadcrumb's built-in interfaces as a fallback
+    if yaml_path is None:
+        yaml_path = find_interface_in_package("breadcrumb", executable=executable, plugin=plugin)
+
     # If still not found, raise an error
     if yaml_path is None:
         search_criteria = f"executable='{executable}'" if executable else f"plugin='{plugin}'"
         packages_searched = [package]
         if launching_package is not None:
             packages_searched.append(launching_package)
+        packages_searched.append("breadcrumb")
         raise FileNotFoundError(
             f"Could not find node interface YAML for {search_criteria} in packages: {packages_searched}"
         )

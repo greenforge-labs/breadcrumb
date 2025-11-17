@@ -1,0 +1,12 @@
+node:
+    name: throttle
+    package: topic_tools
+    plugin: topic_tools::ThrottleNode
+
+subscribers:
+    - topic: in
+      type: Any
+
+publishers:
+    - topic: out
+      type: Any
