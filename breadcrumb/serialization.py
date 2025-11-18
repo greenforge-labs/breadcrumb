@@ -203,17 +203,18 @@ def _get_inter_group_communication(
     graph: Graph, groups: dict[str | None, list[Node]]
 ) -> tuple[list[Topic], list[Service], list[Action]]:
     """
-    Filter topics, services, and actions to only those connecting different groups.
+    Filter topics, services, and actions to only those connecting different groups or root nodes.
 
-    A communication entity is inter-group if it has nodes from different groups
-    on either side (e.g., publishers from group A and subscribers from group B).
+    A communication entity is inter-group if:
+    - It has nodes from multiple different named groups, OR
+    - It involves root namespace nodes
 
     Args:
         graph: The complete graph
         groups: Dictionary mapping group names to lists of nodes
 
     Returns:
-        Tuple of (topics, services, actions) that connect between groups
+        Tuple of (topics, services, actions) that connect between groups or to/from root nodes
     """
     # Create mapping from node FQN to group name for quick lookup
     node_to_group: dict[str, str | None] = {}
@@ -226,38 +227,42 @@ def _get_inter_group_communication(
         # Get groups involved in this topic
         pub_groups = {node_to_group.get(pub.fqn) for pub in topic.publishers}
         sub_groups = {node_to_group.get(sub.fqn) for sub in topic.subscribers}
+        all_groups = pub_groups | sub_groups
 
-        # Remove None (root namespace nodes) from the check
-        pub_groups_non_root = pub_groups - {None}
-        sub_groups_non_root = sub_groups - {None}
+        # Inter-group if:
+        # 1. Multiple non-root groups are involved, OR
+        # 2. Root namespace node (None) is involved
+        all_groups_non_root = all_groups - {None}
+        has_root = None in all_groups
+        multiple_groups = len(all_groups_non_root) > 1
 
-        # Inter-group if multiple non-root groups are involved
-        all_groups = pub_groups_non_root | sub_groups_non_root
-        if len(all_groups) > 1:
+        if has_root or multiple_groups:
             inter_group_topics.append(topic)
 
     inter_group_services = []
     for service in graph.services:
         prov_groups = {node_to_group.get(prov.fqn) for prov in service.providers}
         client_groups = {node_to_group.get(client.fqn) for client in service.clients}
+        all_groups = prov_groups | client_groups
 
-        prov_groups_non_root = prov_groups - {None}
-        client_groups_non_root = client_groups - {None}
+        all_groups_non_root = all_groups - {None}
+        has_root = None in all_groups
+        multiple_groups = len(all_groups_non_root) > 1
 
-        all_groups = prov_groups_non_root | client_groups_non_root
-        if len(all_groups) > 1:
+        if has_root or multiple_groups:
             inter_group_services.append(service)
 
     inter_group_actions = []
     for action in graph.actions:
         srv_groups = {node_to_group.get(srv.fqn) for srv in action.servers}
         client_groups = {node_to_group.get(client.fqn) for client in action.clients}
+        all_groups = srv_groups | client_groups
 
-        srv_groups_non_root = srv_groups - {None}
-        client_groups_non_root = client_groups - {None}
+        all_groups_non_root = all_groups - {None}
+        has_root = None in all_groups
+        multiple_groups = len(all_groups_non_root) > 1
 
-        all_groups = srv_groups_non_root | client_groups_non_root
-        if len(all_groups) > 1:
+        if has_root or multiple_groups:
             inter_group_actions.append(action)
 
     return inter_group_topics, inter_group_services, inter_group_actions
@@ -280,18 +285,27 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
     lines.append("  node [shape=box];")
     lines.append("")
 
-    # Add group nodes (exclude None/root namespace)
+    # Add group nodes
     lines.append("  // Groups")
     for group_name, group_nodes in groups.items():
-        if group_name is None:
-            continue  # Skip root namespace nodes in top-level view
-
-        group_id = _escape_dot_label(group_name)
-        node_count = len(group_nodes)
-        label = f"{group_name}\\n({node_count} node{'s' if node_count != 1 else ''})"
-        lines.append(f'  "{group_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
+        if group_name is not None:
+            group_id = _escape_dot_label(group_name)
+            node_count = len(group_nodes)
+            label = f"{group_name}\\n({node_count} node{'s' if node_count != 1 else ''})"
+            lines.append(f'  "{group_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
 
     lines.append("")
+
+    # Add root namespace nodes
+    root_nodes = groups.get(None, [])
+    if root_nodes:
+        lines.append("  // Root Namespace Nodes")
+        for node in root_nodes:
+            node_id = _escape_dot_label(node.fqn)
+            label = f"{node.name}\\n({node.package})"
+            lines.append(f'  "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightyellow];')
+
+        lines.append("")
 
     # Get inter-group communication entities
     inter_topics, inter_services, inter_actions = _get_inter_group_communication(graph, groups)
@@ -306,18 +320,28 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
                 f'  "{topic_id}" [label="{_escape_dot_label(label)}", shape=ellipse, style=filled, fillcolor=lightgreen];'
             )
 
-            # Connect group nodes to topic (only for non-root nodes)
+            # Connect group nodes and root nodes to topic
             for pub in topic.publishers:
                 pub_group = extract_group_name(pub.namespace)
                 if pub_group is not None:
+                    # Publisher is in a named group
                     group_id = _escape_dot_label(pub_group)
                     lines.append(f'  "{group_id}" -> "{topic_id}" [label="pub"];')
+                else:
+                    # Publisher is a root namespace node
+                    node_id = _escape_dot_label(pub.fqn)
+                    lines.append(f'  "{node_id}" -> "{topic_id}" [label="pub"];')
 
             for sub in topic.subscribers:
                 sub_group = extract_group_name(sub.namespace)
                 if sub_group is not None:
+                    # Subscriber is in a named group
                     group_id = _escape_dot_label(sub_group)
                     lines.append(f'  "{topic_id}" -> "{group_id}" [label="sub"];')
+                else:
+                    # Subscriber is a root namespace node
+                    node_id = _escape_dot_label(sub.fqn)
+                    lines.append(f'  "{topic_id}" -> "{node_id}" [label="sub"];')
 
         lines.append("")
 
@@ -334,14 +358,24 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
             for provider in service.providers:
                 prov_group = extract_group_name(provider.namespace)
                 if prov_group is not None:
+                    # Provider is in a named group
                     group_id = _escape_dot_label(prov_group)
                     lines.append(f'  "{group_id}" -> "{svc_id}" [label="provide", style=dashed];')
+                else:
+                    # Provider is a root namespace node
+                    node_id = _escape_dot_label(provider.fqn)
+                    lines.append(f'  "{node_id}" -> "{svc_id}" [label="provide", style=dashed];')
 
             for client in service.clients:
                 client_group = extract_group_name(client.namespace)
                 if client_group is not None:
+                    # Client is in a named group
                     group_id = _escape_dot_label(client_group)
                     lines.append(f'  "{svc_id}" -> "{group_id}" [label="call", style=dashed, dir=back];')
+                else:
+                    # Client is a root namespace node
+                    node_id = _escape_dot_label(client.fqn)
+                    lines.append(f'  "{svc_id}" -> "{node_id}" [label="call", style=dashed, dir=back];')
 
         lines.append("")
 
@@ -358,14 +392,24 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
             for server in action.servers:
                 srv_group = extract_group_name(server.namespace)
                 if srv_group is not None:
+                    # Server is in a named group
                     group_id = _escape_dot_label(srv_group)
                     lines.append(f'  "{group_id}" -> "{act_id}" [label="serve", style=dotted];')
+                else:
+                    # Server is a root namespace node
+                    node_id = _escape_dot_label(server.fqn)
+                    lines.append(f'  "{node_id}" -> "{act_id}" [label="serve", style=dotted];')
 
             for client in action.clients:
                 client_group = extract_group_name(client.namespace)
                 if client_group is not None:
+                    # Client is in a named group
                     group_id = _escape_dot_label(client_group)
                     lines.append(f'  "{act_id}" -> "{group_id}" [label="call", style=dotted, dir=back];')
+                else:
+                    # Client is a root namespace node
+                    node_id = _escape_dot_label(client.fqn)
+                    lines.append(f'  "{act_id}" -> "{node_id}" [label="call", style=dotted, dir=back];')
 
         lines.append("")
 
