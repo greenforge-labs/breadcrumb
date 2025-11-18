@@ -7,6 +7,11 @@ import xml.etree.ElementTree as ET
 from ament_index_python.packages import get_package_share_directory
 from clingwrap.static_info import LaunchFileInclude
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from breadcrumb.graph import Node
+
 
 @dataclass
 class LaunchFileSource:
@@ -70,3 +75,62 @@ def get_package_name_from_path(path: Path) -> str | None:
         current_path = current_path.parent
 
     return None
+
+
+def extract_group_name(namespace: str | None) -> str | None:
+    """
+    Extract the first element of a namespace for grouping purposes.
+
+    Args:
+        namespace: The node namespace (e.g., "robot1/sensors/camera" or "robot1")
+
+    Returns:
+        The first namespace element (e.g., "robot1"), or None if namespace is None/empty
+
+    Examples:
+        >>> extract_group_name("robot1/sensors/camera")
+        'robot1'
+        >>> extract_group_name("robot1")
+        'robot1'
+        >>> extract_group_name(None)
+        None
+        >>> extract_group_name("")
+        None
+    """
+    if not namespace:
+        return None
+
+    # Strip leading/trailing slashes and split on '/'
+    cleaned = namespace.strip("/")
+    if not cleaned:
+        return None
+
+    # Get the first element
+    parts = cleaned.split("/")
+    return parts[0]
+
+
+def group_nodes_by_namespace(nodes: list["Node"]) -> dict[str | None, list["Node"]]:
+    """
+    Group nodes by the first element of their namespace.
+
+    Args:
+        nodes: List of nodes to group
+
+    Returns:
+        Dictionary mapping group names to lists of nodes.
+        Nodes with no namespace are mapped to None.
+
+    Examples:
+        If nodes have namespaces ["robot1/sensors", "robot1/control", "robot2/sensors", None]:
+        Returns: {"robot1": [...], "robot2": [...], None: [...]}
+    """
+    groups: dict[str | None, list["Node"]] = {}
+
+    for node in nodes:
+        group_name = extract_group_name(node.namespace)
+        if group_name not in groups:
+            groups[group_name] = []
+        groups[group_name].append(node)
+
+    return groups

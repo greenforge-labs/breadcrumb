@@ -12,7 +12,7 @@ from .graph import build_graph
 from .helpers import LaunchFileSource, get_launch_file_sources_from_included_launch_files, get_package_name_from_path
 from .launch_parser import LaunchFileLoadError, get_launch_file_static_information
 from .node_interface import NodeInterface, load_node_interface
-from .serialization import serialize_graph, serialize_to_dot
+from .serialization import serialize_graph, serialize_to_dot, serialize_to_grouped_dot_files
 
 
 @click.command()
@@ -34,7 +34,13 @@ from .serialization import serialize_graph, serialize_to_dot
     default=False,
     help="Include entities whose names start with underscore (hidden by default)",
 )
-def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bool):
+@click.option(
+    "--graph-type",
+    type=click.Choice(["full_system", "grouped_by_namespace", "grouped_and_full_system"]),
+    default="full_system",
+    help="Type of graph to generate (only for .dot output)",
+)
+def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bool, graph_type: str):
     """Static analysis tool for ROS 2 node graphs.
 
     Analyzes one or more clingwrap launch files and displays the discovered
@@ -51,6 +57,10 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
       breadcrumb my_robot.launch.py -o graph.json
 
       breadcrumb my_robot.launch.py -o graph.dot
+
+      breadcrumb my_robot.launch.py -o graph.dot --graph-type grouped
+
+      breadcrumb my_robot.launch.py -o graph.dot --graph-type grouped_and_full_system
     """
 
     # Configure warnings to display nicely with click
@@ -128,16 +138,38 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
         suffix = output.suffix.lower()
 
         if suffix == ".json":
+            if graph_type != "full_system":
+                click.echo("Warning: --graph-type is ignored for JSON output (always generates full system)", err=True)
             graph_data = serialize_graph(graph)
             with open(output, "w") as f:
                 json.dump(graph_data, f, indent=2)
+            click.echo(f"Graph written to: {output}")
         elif suffix == ".dot":
-            dot_content = serialize_to_dot(graph)
-            with open(output, "w") as f:
-                f.write(dot_content)
+            # Remove .dot extension to use as prefix
+            output_prefix = str(output.with_suffix(""))
+            generated_files = []
+
+            # Generate full system graph if requested
+            if graph_type in ["full_system", "grouped_and_full_system"]:
+                dot_content = serialize_to_dot(graph)
+                full_system_path = Path(f"{output_prefix}_full_system.dot")
+                with open(full_system_path, "w") as f:
+                    f.write(dot_content)
+                generated_files.append(full_system_path)
+
+            # Generate grouped DOT files if requested
+            if graph_type in ["grouped_by_namespace", "grouped_and_full_system"]:
+                grouped_files = serialize_to_grouped_dot_files(graph, output_prefix)
+                generated_files.extend(grouped_files)
+
+            # Report generated files
+            if len(generated_files) == 1:
+                click.echo(f"Graph written to: {generated_files[0]}")
+            else:
+                click.echo(f"Generated {len(generated_files)} DOT files:")
+                for file_path in generated_files:
+                    click.echo(f"  - {file_path}")
         else:
             raise click.BadParameter(
                 f"Unsupported file extension: {suffix}. " f"Supported formats: .json, .dot, .mmd, .mermaid"
             )
-
-        click.echo(f"Graph written to: {output}")
