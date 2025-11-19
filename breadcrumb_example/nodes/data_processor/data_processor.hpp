@@ -1,9 +1,9 @@
 #pragma once
 
-#include <memory>
-#include <vector>
 #include <breadcrumb_example/data_processor_interface.hpp>
+#include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <vector>
 
 namespace breadcrumb_example::data_processor {
 

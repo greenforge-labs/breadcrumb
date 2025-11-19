@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory>
 #include <breadcrumb_example/controller_interface.hpp>
+#include <memory>
 #include <rclcpp/rclcpp.hpp>
 
 namespace breadcrumb_example::controller {

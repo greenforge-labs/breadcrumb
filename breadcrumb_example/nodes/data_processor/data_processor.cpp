@@ -53,7 +53,9 @@ void get_statistics_handler(
 
     if (ctx->sample_count > 0) {
         double avg = ctx->sum_temp / ctx->sample_count;
-        oss << ", min=" << ctx->min_temp << "°C" << ", max=" << ctx->max_temp << "°C" << ", avg=" << avg << "°C";
+        oss << ", min=" << ctx->min_temp << "°C"
+            << ", max=" << ctx->max_temp << "°C"
+            << ", avg=" << avg << "°C";
     }
 
     response->success = true;
