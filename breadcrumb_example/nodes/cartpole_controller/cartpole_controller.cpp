@@ -6,6 +6,18 @@
 
 namespace breadcrumb_example::cartpole_controller {
 
+// Helper function to print current feedback gains
+void print_gains(std::shared_ptr<Context> ctx) {
+    RCLCPP_INFO(
+        ctx->node->get_logger(),
+        "  Feedback Gains: K = [%.2f, %.2f, %.2f, %.2f]",
+        ctx->params.k1,
+        ctx->params.k2,
+        ctx->params.k3,
+        ctx->params.k4
+    );
+}
+
 // Joint state callback - extract state from joint_states message
 void joint_state_callback(std::shared_ptr<Context> ctx, sensor_msgs::msg::JointState::ConstSharedPtr msg) {
     // Look for cart_to_world and pole_to_cart joints
@@ -44,6 +56,12 @@ void enable_handler(
 
 // State feedback control timer callback
 void control_timer_callback(std::shared_ptr<Context> ctx) {
+    // Update parameters if the are out of date
+    if (ctx->param_listener->is_old(ctx->params)) {
+        ctx->params = ctx->param_listener->get_params();
+        print_gains(ctx);
+    }
+
     // Don't publish if controller is disabled or we haven't received state yet
     if (!ctx->enabled || !ctx->state_received) {
         return;
@@ -77,14 +95,7 @@ void init(std::shared_ptr<Context> ctx) {
     cake::create_timer(ctx, std::chrono::milliseconds(20), control_timer_callback);
 
     RCLCPP_INFO(ctx->node->get_logger(), "State Feedback Cartpole Controller initialized");
-    RCLCPP_INFO(
-        ctx->node->get_logger(),
-        "  Feedback Gains: K = [%.2f, %.2f, %.2f, %.2f]",
-        ctx->params.k1,
-        ctx->params.k2,
-        ctx->params.k3,
-        ctx->params.k4
-    );
+    print_gains(ctx);
     RCLCPP_INFO(ctx->node->get_logger(), "  Controller state: %s", ctx->enabled ? "ENABLED" : "DISABLED");
 }
 
