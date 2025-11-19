@@ -5,26 +5,26 @@ node:
 parameters:
   k1:
     type: double
-    default_value: -1.0
-    description: LQR gain for cart position
+    default_value: 0.0
+    description: State feedback gain for cart position
     read_only: false
 
   k2:
     type: double
-    default_value: -3.0
-    description: LQR gain for cart velocity
+    default_value: 0.0
+    description: State feedback gain for cart velocity
     read_only: false
 
   k3:
     type: double
-    default_value: 20.0
-    description: LQR gain for pole angle
+    default_value: 0.0
+    description: State feedback gain for pole angle
     read_only: false
 
   k4:
     type: double
-    default_value: 5.0
-    description: LQR gain for pole angular velocity
+    default_value: 0.0
+    description: State feedback gain for pole angular velocity
     read_only: false
 
 subscribers:

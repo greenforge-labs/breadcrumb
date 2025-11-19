@@ -42,14 +42,14 @@ void enable_handler(
     }
 }
 
-// LQR control timer callback
+// State feedback control timer callback
 void control_timer_callback(std::shared_ptr<Context> ctx) {
     // Don't publish if controller is disabled or we haven't received state yet
     if (!ctx->enabled || !ctx->state_received) {
         return;
     }
 
-    // LQR state feedback: u = -K * x
+    // Full state feedback: u = -K * x
     // State vector: x = [cart_position, cart_velocity, pole_angle, pole_angular_velocity]
     // Control law: u = -(k1*x1 + k2*x2 + k3*x3 + k4*x4)
     const double k1 = ctx->params.k1;
@@ -76,10 +76,10 @@ void init(std::shared_ptr<Context> ctx) {
     // Create control timer (50 Hz to match simulator)
     cake::create_timer(ctx, std::chrono::milliseconds(20), control_timer_callback);
 
-    RCLCPP_INFO(ctx->node->get_logger(), "LQR Cartpole Controller initialized");
+    RCLCPP_INFO(ctx->node->get_logger(), "State Feedback Cartpole Controller initialized");
     RCLCPP_INFO(
         ctx->node->get_logger(),
-        "  LQR Gains: K = [%.2f, %.2f, %.2f, %.2f]",
+        "  Feedback Gains: K = [%.2f, %.2f, %.2f, %.2f]",
         ctx->params.k1,
         ctx->params.k2,
         ctx->params.k3,

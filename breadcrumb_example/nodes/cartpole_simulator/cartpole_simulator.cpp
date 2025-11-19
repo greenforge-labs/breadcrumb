@@ -60,16 +60,6 @@ void update_physics(std::shared_ptr<Context> ctx) {
     ctx->pole_angular_velocity += theta_ddot * dt;
     ctx->pole_angle += ctx->pole_angular_velocity * dt;
 
-    // Enforce cart position hard stops (matches URDF joint limits)
-    const double limit = Context::CART_POSITION_LIMIT;
-    if (ctx->cart_position > limit) {
-        ctx->cart_position = limit;
-        ctx->cart_velocity = std::min(0.0, ctx->cart_velocity); // Only allow negative velocity
-    } else if (ctx->cart_position < -limit) {
-        ctx->cart_position = -limit;
-        ctx->cart_velocity = std::max(0.0, ctx->cart_velocity); // Only allow positive velocity
-    }
-
     // Normalize pole angle to [-pi, pi]
     while (ctx->pole_angle > M_PI)
         ctx->pole_angle -= 2.0 * M_PI;

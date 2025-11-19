@@ -16,13 +16,12 @@ struct Context : CartpoleSimulatorContext<Context> {
     double applied_force = 0.0; // Newtons
 
     // Physics parameters (hardcoded)
-    static constexpr double CART_MASS = 1.0;           // kg
-    static constexpr double POLE_MASS = 0.1;           // kg
-    static constexpr double POLE_LENGTH = 1.0;         // meters (full length)
-    static constexpr double GRAVITY = 9.81;            // m/s^2
-    static constexpr double FRICTION = 0.1;            // damping coefficient
-    static constexpr double DT = 0.02;                 // timestep (50 Hz)
-    static constexpr double CART_POSITION_LIMIT = 2.4; // meters (matches URDF joint limit)
+    static constexpr double CART_MASS = 1.0;   // kg
+    static constexpr double POLE_MASS = 0.1;   // kg
+    static constexpr double POLE_LENGTH = 1.0; // meters (full length)
+    static constexpr double GRAVITY = 9.81;    // m/s^2
+    static constexpr double FRICTION = 0.1;    // damping coefficient
+    static constexpr double DT = 0.02;         // timestep (50 Hz)
 
     // Helper method to reset state
     void reset_state() {
