@@ -18,9 +18,9 @@
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>sensor_msgs</depend>
-  <depend>geometry_msgs</depend>
-  <depend>example_interfaces</depend>
-  <depend>nav2_msgs</depend>
+
+  <!-- launch dependencies -->
+  <exec_depend>robot_state_publisher</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
