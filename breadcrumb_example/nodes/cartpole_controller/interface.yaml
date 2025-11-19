@@ -42,3 +42,7 @@ publishers:
 services:
   - name: enable
     type: std_srvs/srv/SetBool
+
+actions:
+  - name: track_position
+    type: breadcrumb_example_interfaces/action/TrackPosition

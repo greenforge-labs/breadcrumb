@@ -15,6 +15,10 @@ struct Context : CartpoleControllerContext<Context> {
     // Controller state
     bool enabled = true;         // Start enabled by default
     bool state_received = false; // Flag to check if we've received state yet
+
+    // Position tracking setpoint
+    double setpoint_position = 0.0; // Target cart position (default: origin)
+    double goal_tolerance = 0.0;    // Tolerance for action completion
 };
 
 void init(std::shared_ptr<Context> ctx);

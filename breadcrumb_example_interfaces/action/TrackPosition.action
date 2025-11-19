@@ -1,0 +1,11 @@
+# Goal: Command the cart to move to a target position while balancing the pole
+float64 target_position    # Target cart position in meters
+float64 goal_tolerance     # Distance threshold for success (meters)
+---
+# Result: Outcome of the position tracking
+bool success               # True if reached within tolerance
+float64 final_position     # Final cart position achieved
+---
+# Feedback: Progress toward the goal
+float64 current_position   # Current cart position
+float64 distance_to_goal   # Absolute distance remaining to target
