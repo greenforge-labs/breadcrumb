@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot name="cartpole">
+
+  <!-- World Link (Fixed base) -->
+  <link name="world"/>
+
+  <!-- Cart Link -->
+  <link name="cart">
+    <visual>
+      <geometry>
+        <box size="0.3 0.2 0.1"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.2 0.4 0.8 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- Pole Link -->
+  <link name="pole">
+    <visual>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.02" length="1.0"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- Cart to World Joint (Prismatic - slides along x-axis) -->
+  <joint name="cart_to_world" type="prismatic">
+    <parent link="world"/>
+    <child link="cart"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.4" upper="2.4" effort="1000" velocity="10"/>
+  </joint>
+
+  <!-- Pole to Cart Joint (Continuous revolute - rotates around y-axis) -->
+  <joint name="pole_to_cart" type="continuous">
+    <parent link="cart"/>
+    <child link="pole"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+</robot>
