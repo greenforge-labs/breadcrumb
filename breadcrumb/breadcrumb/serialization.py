@@ -129,7 +129,7 @@ def serialize_to_dot(graph: Graph) -> str:
     lines.append("  // Nodes")
     for node in graph.nodes:
         node_id = _escape_dot_label(node.fqn)
-        label = f"{node.name}\\n({node.package})"
+        label = f"{node.fqn}\\n({node.package})"
         lines.append(f'  "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
 
     lines.append("")
@@ -302,7 +302,7 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
         lines.append("  // Root Namespace Nodes")
         for node in root_nodes:
             node_id = _escape_dot_label(node.fqn)
-            label = f"{node.name}\\n({node.package})"
+            label = f"{node.fqn}\\n({node.package})"
             lines.append(f'  "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightyellow];')
 
         lines.append("")
@@ -502,7 +502,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
     lines.append("    // Group Nodes")
     for node in group_nodes:
         node_id = _escape_dot_label(node.fqn)
-        label = f"{node.name}\\n({node.package})"
+        label = f"{node.fqn}\\n({node.package})"
         lines.append(f'    "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
 
     # Add internal topics inside cluster

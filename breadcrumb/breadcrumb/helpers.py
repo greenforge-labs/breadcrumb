@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class LaunchFileSource:
     path: Path
     package: str | None = None
+    namespace: str | None = None
 
 
 def get_launch_file_sources_from_included_launch_files(
@@ -28,9 +29,48 @@ def get_launch_file_sources_from_included_launch_files(
             LaunchFileSource(
                 path=Path(get_package_share_directory(include.package)) / include.directory / include.launch_file,
                 package=include.package,
+                namespace=include.namespace,
             )
         )
     return sources
+
+
+def combine_namespaces(parent_ns: str | None, child_ns: str | None) -> str | None:
+    """
+    Combine parent and child namespaces.
+
+    Args:
+        parent_ns: Parent namespace (e.g., "robot1")
+        child_ns: Child namespace (e.g., "sensors/camera" or None)
+
+    Returns:
+        Combined namespace (e.g., "robot1/sensors/camera" or "robot1")
+
+    Examples:
+        >>> combine_namespaces("robot1", "sensors")
+        'robot1/sensors'
+        >>> combine_namespaces("robot1", None)
+        'robot1'
+        >>> combine_namespaces(None, "sensors")
+        'sensors'
+        >>> combine_namespaces(None, None)
+        None
+    """
+    if parent_ns is None:
+        return child_ns
+    if child_ns is None:
+        return parent_ns
+
+    # Clean and combine
+    parent_clean = parent_ns.strip("/")
+    child_clean = child_ns.strip("/")
+
+    if not parent_clean:
+        return child_clean if child_clean else None
+    if not child_clean:
+        return parent_clean
+
+    return f"{parent_clean}/{child_clean}"
 
 
 def get_package_name_from_path(path: Path) -> str | None:

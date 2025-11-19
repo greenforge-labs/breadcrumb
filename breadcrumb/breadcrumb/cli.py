@@ -9,7 +9,12 @@ import click
 from clingwrap.static_info import ComposableNodeInfo, NodeInfo, StaticInformation
 
 from .graph import build_graph
-from .helpers import LaunchFileSource, get_launch_file_sources_from_included_launch_files, get_package_name_from_path
+from .helpers import (
+    LaunchFileSource,
+    combine_namespaces,
+    get_launch_file_sources_from_included_launch_files,
+    get_package_name_from_path,
+)
 from .launch_parser import LaunchFileLoadError, get_launch_file_static_information
 from .node_interface import NodeInterface, load_node_interface
 from .serialization import serialize_graph, serialize_to_dot, serialize_to_grouped_dot_files
@@ -107,6 +112,10 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
         nodes: list[NodeInfo | ComposableNodeInfo] = static_info.nodes + static_info.get_all_composable_nodes()
 
         for node in nodes:
+            # Apply namespace from launch source to node
+            if launch_source.namespace is not None:
+                node.namespace = combine_namespaces(launch_source.namespace, node.namespace)
+
             try:
                 interface = load_node_interface(
                     node.package,
