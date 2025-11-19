@@ -65,7 +65,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /robot_description
+        Value: /hardware/robot_description
       Enabled: true
       Links:
         All Links Enabled: true
@@ -141,7 +141,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 2.6749870777130127
+      Distance: 8.188467025756836
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -156,10 +156,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.71479731798172
+      Pitch: 0.5047975182533264
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.367396593093872
+      Yaw: 1.5373964309692383
     Saved: ~
 Window Geometry:
   Displays:

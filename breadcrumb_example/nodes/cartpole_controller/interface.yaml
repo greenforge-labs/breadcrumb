@@ -1,0 +1,44 @@
+node:
+  name: ${THIS_NODE}
+  package: ${THIS_PACKAGE}
+
+parameters:
+  k1:
+    type: double
+    default_value: -1.0
+    description: LQR gain for cart position
+    read_only: false
+
+  k2:
+    type: double
+    default_value: -3.0
+    description: LQR gain for cart velocity
+    read_only: false
+
+  k3:
+    type: double
+    default_value: 20.0
+    description: LQR gain for pole angle
+    read_only: false
+
+  k4:
+    type: double
+    default_value: 5.0
+    description: LQR gain for pole angular velocity
+    read_only: false
+
+subscribers:
+  - topic: joint_states
+    type: sensor_msgs/msg/JointState
+    qos:
+      profile: SystemDefaultsQoS
+
+publishers:
+  - topic: force
+    type: std_msgs/msg/Float64
+    qos:
+      profile: SystemDefaultsQoS
+
+services:
+  - name: enable
+    type: std_srvs/srv/SetBool

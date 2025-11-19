@@ -97,7 +97,7 @@ void simulation_timer_callback(std::shared_ptr<Context> ctx) {
 
 void init(std::shared_ptr<Context> ctx) {
     // Set up force subscriber
-    ctx->subscribers.cartpole_force->set_callback(force_callback);
+    ctx->subscribers.requested_force->set_callback(force_callback);
 
     // Set up reset service
     ctx->services.reset->set_request_handler(reset_handler);
