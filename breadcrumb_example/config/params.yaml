@@ -1,0 +1,21 @@
+# Example parameter file for breadcrumb_example nodes
+# This file demonstrates how parameters can be loaded from YAML files
+
+sensor_driver:
+  ros__parameters:
+    sensor_id: "configured_sensor"
+    update_rate: 15.0
+    frame_id: "base_link"
+
+data_processor:
+  ros__parameters:
+    processing_enabled: true
+    threshold: 28.0
+
+monitor_node:
+  ros__parameters:
+    log_interval: 10.0
+
+controller:
+  ros__parameters:
+    max_speed: 2.0

@@ -1,0 +1,25 @@
+node:
+  name: ${THIS_NODE}
+  package: ${THIS_PACKAGE}
+
+parameters:
+  max_speed:
+    type: double
+    default_value: 1.0
+    description: "Maximum allowed speed"
+    validation:
+      gt<>: [0.0]
+
+publishers:
+  - topic: cmd_vel
+    type: geometry_msgs/msg/Twist
+    qos:
+      profile: SystemDefaultsQoS
+
+actions:
+  - name: navigate_to_pose
+    type: nav2_msgs/action/NavigateToPose
+
+action_clients:
+  - name: compute_path_to_pose
+    type: nav2_msgs/action/ComputePathToPose
