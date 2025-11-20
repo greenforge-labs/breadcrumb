@@ -436,9 +436,99 @@ def _get_inter_group_communication(
     return inter_group_topics, inter_group_services, inter_group_actions
 
 
+def _categorize_entities_by_group(
+    graph: Graph, groups: dict[str | None, list[Node]]
+) -> tuple[
+    dict[str, list[Topic]],  # group_name -> owned topics (single publisher from group)
+    list[Topic],  # shared topics (0 or multiple publishers)
+    dict[str, list[Service]],  # group_name -> owned services (single provider from group)
+    list[Service],  # shared services (0 or multiple providers)
+    dict[str, list[Action]],  # group_name -> owned actions (single server from group)
+    list[Action],  # shared actions (0 or multiple servers)
+]:
+    """
+    Categorize inter-group topics, services, and actions by their group providers.
+
+    Single-provider entities are assigned to their provider group.
+    Multi-provider or no-provider entities are returned as shared.
+
+    Args:
+        graph: The complete graph
+        groups: Dictionary mapping group names to lists of nodes
+
+    Returns:
+        Tuple of (owned_topics, shared_topics, owned_services, shared_services,
+                  owned_actions, shared_actions)
+    """
+    # Get inter-group communication entities
+    inter_topics, inter_services, inter_actions = _get_inter_group_communication(graph, groups)
+
+    # Categorize topics
+    owned_topics: dict[str, list[Topic]] = {}
+    shared_topics: list[Topic] = []
+
+    for topic in inter_topics:
+        # Get unique groups that publish this topic (excluding root namespace)
+        pub_groups = {extract_group_name(pub.namespace) for pub in topic.publishers}
+        pub_groups_non_root = {g for g in pub_groups if g is not None}
+
+        if len(pub_groups_non_root) == 1:
+            # Single group publishes this topic
+            group_name = next(iter(pub_groups_non_root))
+            if group_name not in owned_topics:
+                owned_topics[group_name] = []
+            owned_topics[group_name].append(topic)
+        else:
+            # Multiple groups or root namespace involved
+            shared_topics.append(topic)
+
+    # Categorize services
+    owned_services: dict[str, list[Service]] = {}
+    shared_services: list[Service] = []
+
+    for service in inter_services:
+        # Get unique groups that provide this service (excluding root namespace)
+        prov_groups = {extract_group_name(prov.namespace) for prov in service.providers}
+        prov_groups_non_root = {g for g in prov_groups if g is not None}
+
+        if len(prov_groups_non_root) == 1:
+            # Single group provides this service
+            group_name = next(iter(prov_groups_non_root))
+            if group_name not in owned_services:
+                owned_services[group_name] = []
+            owned_services[group_name].append(service)
+        else:
+            # Multiple groups or root namespace involved
+            shared_services.append(service)
+
+    # Categorize actions
+    owned_actions: dict[str, list[Action]] = {}
+    shared_actions: list[Action] = []
+
+    for action in inter_actions:
+        # Get unique groups that serve this action (excluding root namespace)
+        srv_groups = {extract_group_name(srv.namespace) for srv in action.servers}
+        srv_groups_non_root = {g for g in srv_groups if g is not None}
+
+        if len(srv_groups_non_root) == 1:
+            # Single group serves this action
+            group_name = next(iter(srv_groups_non_root))
+            if group_name not in owned_actions:
+                owned_actions[group_name] = []
+            owned_actions[group_name].append(action)
+        else:
+            # Multiple groups or root namespace involved
+            shared_actions.append(action)
+
+    return owned_topics, shared_topics, owned_services, shared_services, owned_actions, shared_actions
+
+
 def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]]) -> str:
     """
     Generate a top-level DOT graph showing groups and inter-group connections.
+
+    Each group is placed in its own subgraph cluster along with topics/services/actions
+    that it exclusively provides. Shared or root-level entities are placed outside clusters.
 
     Args:
         graph: The complete graph
@@ -452,16 +542,56 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
     lines.append("  node [shape=box];")
     lines.append("")
 
-    # Add group nodes
-    lines.append("  // Groups")
+    # Categorize entities by group ownership
+    (
+        owned_topics,
+        shared_topics,
+        owned_services,
+        shared_services,
+        owned_actions,
+        shared_actions,
+    ) = _categorize_entities_by_group(graph, groups)
+
+    # Create clusters for each named group with its owned entities
     for group_name, group_nodes in groups.items():
         if group_name is not None:
             group_id = _escape_dot_label(group_name)
+            cluster_name = f"cluster_{_sanitize_dot_id(group_name)}"
+
+            lines.append(f"  subgraph {cluster_name} {{")
+            lines.append(f'    label="{_escape_dot_label(group_name)}";')
+            lines.append("    style=filled;")
+            lines.append("    fillcolor=lightgrey;")
+            lines.append("")
+
+            # Add the group node itself
             node_count = len(group_nodes)
             label = f"{group_name}\\n({node_count} node{'s' if node_count != 1 else ''})"
-            lines.append(f"  {_ros_node_attrs(group_id, label)}")
+            lines.append(f"    {_ros_node_attrs(group_id, label)}")
 
-    lines.append("")
+            # Add owned topics
+            if group_name in owned_topics:
+                for topic in owned_topics[group_name]:
+                    topic_id = _escape_dot_label(topic.name)
+                    label = f"{topic.name}\\n[{topic.msg_type}]"
+                    lines.append(f"    {_topic_node_attrs(topic_id, label)}")
+
+            # Add owned services
+            if group_name in owned_services:
+                for service in owned_services[group_name]:
+                    svc_id = _escape_dot_label(service.name)
+                    label = f"{service.name}\\n[{service.srv_type}]"
+                    lines.append(f"    {_service_node_attrs(svc_id, label)}")
+
+            # Add owned actions
+            if group_name in owned_actions:
+                for action in owned_actions[group_name]:
+                    act_id = _escape_dot_label(action.name)
+                    label = f"{action.name}\\n[{action.action_type}]"
+                    lines.append(f"    {_action_node_attrs(act_id, label)}")
+
+            lines.append("  }")
+            lines.append("")
 
     # Add root namespace nodes
     root_nodes = groups.get(None, [])
@@ -474,105 +604,117 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
 
         lines.append("")
 
-    # Get inter-group communication entities
-    inter_topics, inter_services, inter_actions = _get_inter_group_communication(graph, groups)
-
-    # Add inter-group topics
-    if inter_topics:
-        lines.append("  // Inter-group Topics")
-        for topic in inter_topics:
+    # Add shared/orphaned topics
+    if shared_topics:
+        lines.append("  // Shared Topics")
+        for topic in shared_topics:
             topic_id = _escape_dot_label(topic.name)
             label = f"{topic.name}\\n[{topic.msg_type}]"
             lines.append(f"  {_topic_node_attrs(topic_id, label)}")
-
-            # Connect group nodes and root nodes to topic
-            for pub in topic.publishers:
-                pub_group = extract_group_name(pub.namespace)
-                if pub_group is not None:
-                    # Publisher is in a named group
-                    group_id = _escape_dot_label(pub_group)
-                    lines.append(f"  {_topic_pub_edge(group_id, topic_id)}")
-                else:
-                    # Publisher is a root namespace node
-                    node_id = _escape_dot_label(pub.fqn)
-                    lines.append(f"  {_topic_pub_edge(node_id, topic_id)}")
-
-            for sub in topic.subscribers:
-                sub_group = extract_group_name(sub.namespace)
-                if sub_group is not None:
-                    # Subscriber is in a named group
-                    group_id = _escape_dot_label(sub_group)
-                    lines.append(f"  {_topic_sub_edge(topic_id, group_id)}")
-                else:
-                    # Subscriber is a root namespace node
-                    node_id = _escape_dot_label(sub.fqn)
-                    lines.append(f"  {_topic_sub_edge(topic_id, node_id)}")
-
         lines.append("")
 
-    # Add inter-group services
-    if inter_services:
-        lines.append("  // Inter-group Services")
-        for service in inter_services:
+    # Add shared/orphaned services
+    if shared_services:
+        lines.append("  // Shared Services")
+        for service in shared_services:
             svc_id = _escape_dot_label(service.name)
             label = f"{service.name}\\n[{service.srv_type}]"
             lines.append(f"  {_service_node_attrs(svc_id, label)}")
-
-            for provider in service.providers:
-                prov_group = extract_group_name(provider.namespace)
-                if prov_group is not None:
-                    # Provider is in a named group
-                    group_id = _escape_dot_label(prov_group)
-                    lines.append(f"  {_service_provide_edge(group_id, svc_id)}")
-                else:
-                    # Provider is a root namespace node
-                    node_id = _escape_dot_label(provider.fqn)
-                    lines.append(f"  {_service_provide_edge(node_id, svc_id)}")
-
-            for client in service.clients:
-                client_group = extract_group_name(client.namespace)
-                if client_group is not None:
-                    # Client is in a named group
-                    group_id = _escape_dot_label(client_group)
-                    lines.append(f"  {_service_call_edge(group_id, svc_id)}")
-                else:
-                    # Client is a root namespace node
-                    node_id = _escape_dot_label(client.fqn)
-                    lines.append(f"  {_service_call_edge(node_id, svc_id)}")
-
         lines.append("")
 
-    # Add inter-group actions
-    if inter_actions:
-        lines.append("  // Inter-group Actions")
-        for action in inter_actions:
+    # Add shared/orphaned actions
+    if shared_actions:
+        lines.append("  // Shared Actions")
+        for action in shared_actions:
             act_id = _escape_dot_label(action.name)
             label = f"{action.name}\\n[{action.action_type}]"
             lines.append(f"  {_action_node_attrs(act_id, label)}")
-
-            for server in action.servers:
-                srv_group = extract_group_name(server.namespace)
-                if srv_group is not None:
-                    # Server is in a named group
-                    group_id = _escape_dot_label(srv_group)
-                    lines.append(f"  {_action_serve_edge(group_id, act_id)}")
-                else:
-                    # Server is a root namespace node
-                    node_id = _escape_dot_label(server.fqn)
-                    lines.append(f"  {_action_serve_edge(node_id, act_id)}")
-
-            for client in action.clients:
-                client_group = extract_group_name(client.namespace)
-                if client_group is not None:
-                    # Client is in a named group
-                    group_id = _escape_dot_label(client_group)
-                    lines.append(f"  {_action_call_edge(group_id, act_id)}")
-                else:
-                    # Client is a root namespace node
-                    node_id = _escape_dot_label(client.fqn)
-                    lines.append(f"  {_action_call_edge(node_id, act_id)}")
-
         lines.append("")
+
+    # Get all inter-group entities for edge creation
+    inter_topics, inter_services, inter_actions = _get_inter_group_communication(graph, groups)
+
+    # Add all edges (edges can cross cluster boundaries)
+    lines.append("  // Topic Edges")
+    for topic in inter_topics:
+        topic_id = _escape_dot_label(topic.name)
+
+        # Connect group nodes and root nodes to topic
+        for pub in topic.publishers:
+            pub_group = extract_group_name(pub.namespace)
+            if pub_group is not None:
+                # Publisher is in a named group
+                group_id = _escape_dot_label(pub_group)
+                lines.append(f"  {_topic_pub_edge(group_id, topic_id)}")
+            else:
+                # Publisher is a root namespace node
+                node_id = _escape_dot_label(pub.fqn)
+                lines.append(f"  {_topic_pub_edge(node_id, topic_id)}")
+
+        for sub in topic.subscribers:
+            sub_group = extract_group_name(sub.namespace)
+            if sub_group is not None:
+                # Subscriber is in a named group
+                group_id = _escape_dot_label(sub_group)
+                lines.append(f"  {_topic_sub_edge(topic_id, group_id)}")
+            else:
+                # Subscriber is a root namespace node
+                node_id = _escape_dot_label(sub.fqn)
+                lines.append(f"  {_topic_sub_edge(topic_id, node_id)}")
+    lines.append("")
+
+    lines.append("  // Service Edges")
+    for service in inter_services:
+        svc_id = _escape_dot_label(service.name)
+
+        for provider in service.providers:
+            prov_group = extract_group_name(provider.namespace)
+            if prov_group is not None:
+                # Provider is in a named group
+                group_id = _escape_dot_label(prov_group)
+                lines.append(f"  {_service_provide_edge(group_id, svc_id)}")
+            else:
+                # Provider is a root namespace node
+                node_id = _escape_dot_label(provider.fqn)
+                lines.append(f"  {_service_provide_edge(node_id, svc_id)}")
+
+        for client in service.clients:
+            client_group = extract_group_name(client.namespace)
+            if client_group is not None:
+                # Client is in a named group
+                group_id = _escape_dot_label(client_group)
+                lines.append(f"  {_service_call_edge(group_id, svc_id)}")
+            else:
+                # Client is a root namespace node
+                node_id = _escape_dot_label(client.fqn)
+                lines.append(f"  {_service_call_edge(node_id, svc_id)}")
+    lines.append("")
+
+    lines.append("  // Action Edges")
+    for action in inter_actions:
+        act_id = _escape_dot_label(action.name)
+
+        for server in action.servers:
+            srv_group = extract_group_name(server.namespace)
+            if srv_group is not None:
+                # Server is in a named group
+                group_id = _escape_dot_label(srv_group)
+                lines.append(f"  {_action_serve_edge(group_id, act_id)}")
+            else:
+                # Server is a root namespace node
+                node_id = _escape_dot_label(server.fqn)
+                lines.append(f"  {_action_serve_edge(node_id, act_id)}")
+
+        for client in action.clients:
+            client_group = extract_group_name(client.namespace)
+            if client_group is not None:
+                # Client is in a named group
+                group_id = _escape_dot_label(client_group)
+                lines.append(f"  {_action_call_edge(group_id, act_id)}")
+            else:
+                # Client is a root namespace node
+                node_id = _escape_dot_label(client.fqn)
+                lines.append(f"  {_action_call_edge(node_id, act_id)}")
 
     lines.append("}")
     return "\n".join(lines)

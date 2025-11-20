@@ -2,35 +2,46 @@ digraph ROS2TopLevel {
   rankdir=LR;
   node [shape=box];
 
-  // Groups
-  "control" [label="control\n(1 node)", style=filled, fillcolor=lightblue];
-  "hardware" [label="hardware\n(2 nodes)", style=filled, fillcolor=lightblue];
+  subgraph cluster_control {
+    label="control";
+    style=filled;
+    fillcolor=lightgrey;
+
+    "control" [label="control\n(1 node)", style=filled, fillcolor=lightblue];
+    "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
+    "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
+    "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
+  }
+
+  subgraph cluster_hardware {
+    label="hardware";
+    style=filled;
+    fillcolor=lightgrey;
+
+    "hardware" [label="hardware\n(2 nodes)", style=filled, fillcolor=lightblue];
+    "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
+    "/hardware/reset" [label="/hardware/reset\n[std_srvs/srv/Trigger]", shape=diamond, style=filled, fillcolor=lightyellow];
+  }
 
   // Root Namespace Nodes
   "/cartpole_ui" [label="/cartpole_ui\n(breadcrumb_example)", style=filled, fillcolor=lightyellow];
   "/rviz2" [label="/rviz2\n(rviz2)", style=filled, fillcolor=lightyellow];
 
-  // Inter-group Topics
-  "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  // Topic Edges
   "hardware" -> "/hardware/joint_states" [label="pub"];
   "/hardware/joint_states" -> "/cartpole_ui" [label="sub", dir=back];
   "/hardware/joint_states" -> "control" [label="sub", dir=back];
   "/hardware/joint_states" -> "hardware" [label="sub", dir=back];
-  "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
   "control" -> "/hardware/request/force" [label="pub"];
   "/hardware/request/force" -> "hardware" [label="sub", dir=back];
 
-  // Inter-group Services
-  "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
+  // Service Edges
   "control" -> "/control/enable" [label="provide", style=dashed];
   "/control/enable" -> "/cartpole_ui" [label="call", style=dashed, dir=back];
-  "/hardware/reset" [label="/hardware/reset\n[std_srvs/srv/Trigger]", shape=diamond, style=filled, fillcolor=lightyellow];
   "hardware" -> "/hardware/reset" [label="provide", style=dashed];
   "/hardware/reset" -> "/cartpole_ui" [label="call", style=dashed, dir=back];
 
-  // Inter-group Actions
-  "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
+  // Action Edges
   "control" -> "/control/track_position" [label="serve", style=dotted];
   "/control/track_position" -> "/cartpole_ui" [label="call", style=dotted, dir=back];
-
 }
