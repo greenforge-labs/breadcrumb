@@ -1,0 +1,31 @@
+node:
+  name: ${THIS_NODE}
+  package: ${THIS_PACKAGE}
+
+parameters:
+  webserver_port:
+    type: int
+    default_value: 8080
+    description: Port for the web dashboard
+
+  controller_node_name:
+    type: string
+    default_value: "cartpole_controller"
+    description: Name of the controller node for parameter updates
+
+subscribers:
+  - topic: joint_states
+    type: sensor_msgs/msg/JointState
+    qos:
+      profile: SystemDefaultsQoS
+
+service_clients:
+  - name: enable_controller
+    type: std_srvs/srv/SetBool
+
+  - name: reset_simulator
+    type: std_srvs/srv/Trigger
+
+action_clients:
+  - name: track_position
+    type: breadcrumb_example_interfaces/action/TrackPosition

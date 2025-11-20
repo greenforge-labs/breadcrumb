@@ -6,5 +6,6 @@ def generate_launch_description():
 
     l.include_launch_py("breadcrumb_example", "_hardware.launch.py")
     l.include_launch_py("breadcrumb_example", "_control.launch.py")
+    l.include_launch_py("breadcrumb_example", "_ui.launch.py")
 
     return l
