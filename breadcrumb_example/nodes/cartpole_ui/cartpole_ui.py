@@ -3,11 +3,12 @@
 
 from dataclasses import dataclass, field
 import json
-import os
+from pathlib import Path
 from queue import Queue
 from threading import Lock
 import time
 
+from ament_index_python.packages import get_package_share_directory
 from breadcrumb_example.cartpole_ui.interface import CartpoleUiContext, run
 from cake import create_thread
 from flask import Flask, Response, jsonify, render_template, request
@@ -20,8 +21,8 @@ from std_srvs.srv import SetBool, Trigger
 
 from breadcrumb_example_interfaces.action import TrackPosition
 
-# Flask app setup - use absolute path to templates since Python file is symlinked
-TEMPLATE_DIR = "/ws/src/anvil/_src_extras/breadcrumb/breadcrumb_example/nodes/cartpole_ui/templates"
+# Flask app setup
+TEMPLATE_DIR = Path(get_package_share_directory("breadcrumb_example")) / "web_templates"
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 
 
@@ -124,6 +125,8 @@ def sse():
     """Server-Sent Events endpoint for real-time updates."""
 
     def event_stream():
+        from queue import Empty
+
         q = Queue(maxsize=5)  # Smaller queue to prevent memory buildup
         ctx_global.web_clients.append(q)
         ctx_global.logger.info(f"SSE client connected. Total clients: {len(ctx_global.web_clients)}")
@@ -134,20 +137,14 @@ def sse():
                     # Use timeout to send keepalive and detect disconnections
                     data = q.get(timeout=5.0)
                     yield f"data: {json.dumps(data)}\n\n"
-                except:
+                except Empty:
                     # Timeout - send keepalive comment to detect disconnections
                     yield ": keepalive\n\n"
-        except GeneratorExit:
-            # Client disconnected normally
-            ctx_global.logger.info("SSE client disconnected")
-        except Exception as e:
-            # Error occurred
-            ctx_global.logger.error(f"SSE error: {e}")
         finally:
-            # Clean up this client's queue
+            # Clean up this client's queue (always runs on disconnect)
             if q in ctx_global.web_clients:
                 ctx_global.web_clients.remove(q)
-            ctx_global.logger.info(f"SSE client removed. Total clients: {len(ctx_global.web_clients)}")
+            ctx_global.logger.info(f"SSE client disconnected. Total clients: {len(ctx_global.web_clients)}")
 
     return Response(event_stream(), mimetype="text/event-stream")
 
@@ -180,6 +177,8 @@ def reset_simulator():
     try:
         req = Trigger.Request()
         future = ctx_global.service_clients.reset_simulator.call_async(req)
+        # Note: In a production system, you'd wait for the future with a timeout
+        # For simplicity, we're fire-and-forget here
 
         ctx_global.logger.info("Simulator reset requested")
         return jsonify({"success": True})
@@ -204,9 +203,9 @@ def track_position():
         # Send goal
         ctx_global.tracking_goal = True
         send_goal_future = ctx_global.action_clients.track_position.send_goal_async(
-            goal_msg, feedback_callback=lambda feedback_msg: track_position_feedback(feedback_msg)
+            goal_msg, feedback_callback=track_position_feedback
         )
-        send_goal_future.add_done_callback(lambda future: track_position_response(future))
+        send_goal_future.add_done_callback(track_position_response)
 
         ctx_global.logger.info(f"Tracking position goal sent: {target_position}")
         return jsonify({"success": True, "target": target_position})
@@ -235,7 +234,7 @@ def track_position_response(future):
 
     ctx_global.logger.info("Position tracking goal accepted")
     result_future = goal_handle.get_result_async()
-    result_future.add_done_callback(lambda future: track_position_result(future))
+    result_future.add_done_callback(track_position_result)
 
 
 def track_position_result(future):
