@@ -1,0 +1,36 @@
+digraph ROS2Graph {
+  rankdir=LR;
+  node [shape=box];
+
+  // Nodes
+  "/cartpole_ui" [label="/cartpole_ui\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
+  "/control/cartpole_controller" [label="/control/cartpole_controller\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
+  "/hardware/robot_state_publisher" [label="/hardware/robot_state_publisher\n(robot_state_publisher)", style=filled, fillcolor=lightblue];
+  "/hardware/cartpole_simulator" [label="/hardware/cartpole_simulator\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
+  "/rviz2" [label="/rviz2\n(rviz2)", style=filled, fillcolor=lightblue];
+
+  // Topics
+  "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="pub"];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="sub", dir=back];
+  "/hardware/joint_states" -> "/control/cartpole_controller" [label="sub", dir=back];
+  "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="sub", dir=back];
+  "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/control/cartpole_controller" -> "/hardware/request/force" [label="pub"];
+  "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="sub", dir=back];
+  "/hardware/robot_description" [label="/hardware/robot_description\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/hardware/robot_state_publisher" -> "/hardware/robot_description" [label="pub"];
+
+  // Services
+  "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
+  "/control/cartpole_controller" -> "/control/enable" [label="provide", style=dashed];
+  "/control/enable" -> "/cartpole_ui" [label="call", style=dashed, dir=back];
+  "/hardware/reset" [label="/hardware/reset\n[std_srvs/srv/Trigger]", shape=diamond, style=filled, fillcolor=lightyellow];
+  "/hardware/cartpole_simulator" -> "/hardware/reset" [label="provide", style=dashed];
+  "/hardware/reset" -> "/cartpole_ui" [label="call", style=dashed, dir=back];
+
+  // Actions
+  "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
+  "/control/cartpole_controller" -> "/control/track_position" [label="serve", style=dotted];
+  "/control/track_position" -> "/cartpole_ui" [label="call", style=dotted, dir=back];
+}

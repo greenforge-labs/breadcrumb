@@ -1,0 +1,36 @@
+digraph ROS2Group_control {
+  rankdir=LR;
+  node [shape=box];
+  label="Group: control";
+  labelloc=t;
+
+  subgraph cluster_control {
+    label="control";
+    style=filled;
+    fillcolor=lightgrey;
+
+    // Group Nodes
+    "/control/cartpole_controller" [label="/control/cartpole_controller\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
+  }
+
+  // External Topics
+  "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
+
+  // External Services
+  "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
+
+  // External Actions
+  "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
+
+  // External Topic Edges
+  "/hardware/joint_states" -> "/control/cartpole_controller" [label="sub", dir=back];
+  "/control/cartpole_controller" -> "/hardware/request/force" [label="pub"];
+
+  // External Service Edges
+  "/control/cartpole_controller" -> "/control/enable" [label="provide", style=dashed];
+
+  // External Action Edges
+  "/control/cartpole_controller" -> "/control/track_position" [label="serve", style=dotted];
+
+}

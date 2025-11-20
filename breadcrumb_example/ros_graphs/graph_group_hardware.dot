@@ -1,0 +1,38 @@
+digraph ROS2Group_hardware {
+  rankdir=LR;
+  node [shape=box];
+  label="Group: hardware";
+  labelloc=t;
+
+  subgraph cluster_hardware {
+    label="hardware";
+    style=filled;
+    fillcolor=lightgrey;
+
+    // Group Nodes
+    "/hardware/robot_state_publisher" [label="/hardware/robot_state_publisher\n(robot_state_publisher)", style=filled, fillcolor=lightblue];
+    "/hardware/cartpole_simulator" [label="/hardware/cartpole_simulator\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
+
+    // Internal Topics
+    "/hardware/robot_description" [label="/hardware/robot_description\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  }
+
+  // External Topics
+  "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
+
+  // External Services
+  "/hardware/reset" [label="/hardware/reset\n[std_srvs/srv/Trigger]", shape=diamond, style=filled, fillcolor=lightyellow];
+
+  // Internal Topic Edges
+  "/hardware/robot_state_publisher" -> "/hardware/robot_description" [label="pub"];
+
+  // External Topic Edges
+  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="pub"];
+  "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="sub", dir=back];
+  "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="sub", dir=back];
+
+  // External Service Edges
+  "/hardware/cartpole_simulator" -> "/hardware/reset" [label="provide", style=dashed];
+
+}

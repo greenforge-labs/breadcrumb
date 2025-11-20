@@ -109,6 +109,60 @@ def _escape_dot_label(text: str) -> str:
     return text.replace('"', '\\"').replace("\n", "\\n")
 
 
+def _topic_node_attrs(topic_id: str, label: str) -> str:
+    """Generate DOT node attributes for a topic node."""
+    escaped_label = _escape_dot_label(label)
+    return f'"{topic_id}" [label="{escaped_label}", shape=ellipse, style=filled, fillcolor=lightgreen];'
+
+
+def _service_node_attrs(svc_id: str, label: str) -> str:
+    """Generate DOT node attributes for a service node."""
+    escaped_label = _escape_dot_label(label)
+    return f'"{svc_id}" [label="{escaped_label}", shape=diamond, style=filled, fillcolor=lightyellow];'
+
+
+def _action_node_attrs(act_id: str, label: str) -> str:
+    """Generate DOT node attributes for an action node."""
+    escaped_label = _escape_dot_label(label)
+    return f'"{act_id}" [label="{escaped_label}", shape=hexagon, style=filled, fillcolor=lightcoral];'
+
+
+def _ros_node_attrs(node_id: str, label: str, fillcolor: str = "lightblue") -> str:
+    """Generate DOT node attributes for a ROS node."""
+    escaped_label = _escape_dot_label(label)
+    return f'"{node_id}" [label="{escaped_label}", style=filled, fillcolor={fillcolor}];'
+
+
+def _topic_pub_edge(pub_id: str, topic_id: str) -> str:
+    """Generate DOT edge for publisher to topic."""
+    return f'"{pub_id}" -> "{topic_id}" [label="pub"];'
+
+
+def _topic_sub_edge(topic_id: str, sub_id: str) -> str:
+    """Generate DOT edge for topic to subscriber."""
+    return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back];'
+
+
+def _service_provide_edge(prov_id: str, svc_id: str) -> str:
+    """Generate DOT edge for provider to service."""
+    return f'"{prov_id}" -> "{svc_id}" [label="provide", style=dashed];'
+
+
+def _service_call_edge(client_id: str, svc_id: str) -> str:
+    """Generate DOT edge for client to service."""
+    return f'"{svc_id}" -> "{client_id}" [label="call", style=dashed, dir=back];'
+
+
+def _action_serve_edge(srv_id: str, act_id: str) -> str:
+    """Generate DOT edge for server to action."""
+    return f'"{srv_id}" -> "{act_id}" [label="serve", style=dotted];'
+
+
+def _action_call_edge(client_id: str, act_id: str) -> str:
+    """Generate DOT edge for client to action."""
+    return f'"{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];'
+
+
 def serialize_to_dot(graph: Graph) -> str:
     """
     Serialize a Graph object to GraphViz DOT format.
@@ -121,7 +175,6 @@ def serialize_to_dot(graph: Graph) -> str:
     """
     lines = ["digraph ROS2Graph {"]
     lines.append("  rankdir=LR;")
-    lines.append("  ranksep=2.0;")
     lines.append("  node [shape=box];")
     lines.append("")
 
@@ -130,7 +183,7 @@ def serialize_to_dot(graph: Graph) -> str:
     for node in graph.nodes:
         node_id = _escape_dot_label(node.fqn)
         label = f"{node.fqn}\\n({node.package})"
-        lines.append(f'  "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
+        lines.append(f"  {_ros_node_attrs(node_id, label)}")
 
     lines.append("")
 
@@ -139,19 +192,17 @@ def serialize_to_dot(graph: Graph) -> str:
     for topic in graph.topics:
         topic_id = _escape_dot_label(topic.name)
         label = f"{topic.name}\\n[{topic.msg_type}]"
-        lines.append(
-            f'  "{topic_id}" [label="{_escape_dot_label(label)}", shape=ellipse, style=filled, fillcolor=lightgreen];'
-        )
+        lines.append(f"  {_topic_node_attrs(topic_id, label)}")
 
         # Connect publishers to topic
         for pub in topic.publishers:
             pub_id = _escape_dot_label(pub.fqn)
-            lines.append(f'  "{pub_id}" -> "{topic_id}" [label="pub"];')
+            lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
 
         # Connect topic to subscribers
         for sub in topic.subscribers:
             sub_id = _escape_dot_label(sub.fqn)
-            lines.append(f'  "{topic_id}" -> "{sub_id}" [label="sub"];')
+            lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
 
     lines.append("")
 
@@ -160,19 +211,17 @@ def serialize_to_dot(graph: Graph) -> str:
     for service in graph.services:
         svc_id = _escape_dot_label(service.name)
         label = f"{service.name}\\n[{service.srv_type}]"
-        lines.append(
-            f'  "{svc_id}" [label="{_escape_dot_label(label)}", shape=diamond, style=filled, fillcolor=lightyellow];'
-        )
+        lines.append(f"  {_service_node_attrs(svc_id, label)}")
 
         # Connect providers to service
         for provider in service.providers:
             prov_id = _escape_dot_label(provider.fqn)
-            lines.append(f'  "{prov_id}" -> "{svc_id}" [label="provide", style=dashed];')
+            lines.append(f"  {_service_provide_edge(prov_id, svc_id)}")
 
         # Connect service to clients
         for client in service.clients:
             client_id = _escape_dot_label(client.fqn)
-            lines.append(f'  "{svc_id}" -> "{client_id}" [label="call", style=dashed, dir=back];')
+            lines.append(f"  {_service_call_edge(client_id, svc_id)}")
 
     lines.append("")
 
@@ -181,19 +230,17 @@ def serialize_to_dot(graph: Graph) -> str:
     for action in graph.actions:
         act_id = _escape_dot_label(action.name)
         label = f"{action.name}\\n[{action.action_type}]"
-        lines.append(
-            f'  "{act_id}" [label="{_escape_dot_label(label)}", shape=hexagon, style=filled, fillcolor=lightcoral];'
-        )
+        lines.append(f"  {_action_node_attrs(act_id, label)}")
 
         # Connect servers to action
         for server in action.servers:
             srv_id = _escape_dot_label(server.fqn)
-            lines.append(f'  "{srv_id}" -> "{act_id}" [label="serve", style=dotted];')
+            lines.append(f"  {_action_serve_edge(srv_id, act_id)}")
 
-        # Connect action to clients (with reversed arrow direction)
+        # Connect action to clients
         for client in action.clients:
             client_id = _escape_dot_label(client.fqn)
-            lines.append(f'  "{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];')
+            lines.append(f"  {_action_call_edge(client_id, act_id)}")
 
     lines.append("}")
     return "\n".join(lines)
@@ -281,7 +328,6 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
     """
     lines = ["digraph ROS2TopLevel {"]
     lines.append("  rankdir=LR;")
-    lines.append("  ranksep=2.0;")
     lines.append("  node [shape=box];")
     lines.append("")
 
@@ -292,7 +338,7 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
             group_id = _escape_dot_label(group_name)
             node_count = len(group_nodes)
             label = f"{group_name}\\n({node_count} node{'s' if node_count != 1 else ''})"
-            lines.append(f'  "{group_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
+            lines.append(f"  {_ros_node_attrs(group_id, label)}")
 
     lines.append("")
 
@@ -303,7 +349,7 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
         for node in root_nodes:
             node_id = _escape_dot_label(node.fqn)
             label = f"{node.fqn}\\n({node.package})"
-            lines.append(f'  "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightyellow];')
+            lines.append(f'  {_ros_node_attrs(node_id, label, "lightyellow")}')
 
         lines.append("")
 
@@ -316,9 +362,7 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
         for topic in inter_topics:
             topic_id = _escape_dot_label(topic.name)
             label = f"{topic.name}\\n[{topic.msg_type}]"
-            lines.append(
-                f'  "{topic_id}" [label="{_escape_dot_label(label)}", shape=ellipse, style=filled, fillcolor=lightgreen];'
-            )
+            lines.append(f"  {_topic_node_attrs(topic_id, label)}")
 
             # Connect group nodes and root nodes to topic
             for pub in topic.publishers:
@@ -326,22 +370,22 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
                 if pub_group is not None:
                     # Publisher is in a named group
                     group_id = _escape_dot_label(pub_group)
-                    lines.append(f'  "{group_id}" -> "{topic_id}" [label="pub"];')
+                    lines.append(f"  {_topic_pub_edge(group_id, topic_id)}")
                 else:
                     # Publisher is a root namespace node
                     node_id = _escape_dot_label(pub.fqn)
-                    lines.append(f'  "{node_id}" -> "{topic_id}" [label="pub"];')
+                    lines.append(f"  {_topic_pub_edge(node_id, topic_id)}")
 
             for sub in topic.subscribers:
                 sub_group = extract_group_name(sub.namespace)
                 if sub_group is not None:
                     # Subscriber is in a named group
                     group_id = _escape_dot_label(sub_group)
-                    lines.append(f'  "{topic_id}" -> "{group_id}" [label="sub"];')
+                    lines.append(f"  {_topic_sub_edge(topic_id, group_id)}")
                 else:
                     # Subscriber is a root namespace node
                     node_id = _escape_dot_label(sub.fqn)
-                    lines.append(f'  "{topic_id}" -> "{node_id}" [label="sub"];')
+                    lines.append(f"  {_topic_sub_edge(topic_id, node_id)}")
 
         lines.append("")
 
@@ -351,31 +395,29 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
         for service in inter_services:
             svc_id = _escape_dot_label(service.name)
             label = f"{service.name}\\n[{service.srv_type}]"
-            lines.append(
-                f'  "{svc_id}" [label="{_escape_dot_label(label)}", shape=diamond, style=filled, fillcolor=lightyellow];'
-            )
+            lines.append(f"  {_service_node_attrs(svc_id, label)}")
 
             for provider in service.providers:
                 prov_group = extract_group_name(provider.namespace)
                 if prov_group is not None:
                     # Provider is in a named group
                     group_id = _escape_dot_label(prov_group)
-                    lines.append(f'  "{group_id}" -> "{svc_id}" [label="provide", style=dashed];')
+                    lines.append(f"  {_service_provide_edge(group_id, svc_id)}")
                 else:
                     # Provider is a root namespace node
                     node_id = _escape_dot_label(provider.fqn)
-                    lines.append(f'  "{node_id}" -> "{svc_id}" [label="provide", style=dashed];')
+                    lines.append(f"  {_service_provide_edge(node_id, svc_id)}")
 
             for client in service.clients:
                 client_group = extract_group_name(client.namespace)
                 if client_group is not None:
                     # Client is in a named group
                     group_id = _escape_dot_label(client_group)
-                    lines.append(f'  "{svc_id}" -> "{group_id}" [label="call", style=dashed, dir=back];')
+                    lines.append(f"  {_service_call_edge(group_id, svc_id)}")
                 else:
                     # Client is a root namespace node
                     node_id = _escape_dot_label(client.fqn)
-                    lines.append(f'  "{svc_id}" -> "{node_id}" [label="call", style=dashed, dir=back];')
+                    lines.append(f"  {_service_call_edge(node_id, svc_id)}")
 
         lines.append("")
 
@@ -385,31 +427,29 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
         for action in inter_actions:
             act_id = _escape_dot_label(action.name)
             label = f"{action.name}\\n[{action.action_type}]"
-            lines.append(
-                f'  "{act_id}" [label="{_escape_dot_label(label)}", shape=hexagon, style=filled, fillcolor=lightcoral];'
-            )
+            lines.append(f"  {_action_node_attrs(act_id, label)}")
 
             for server in action.servers:
                 srv_group = extract_group_name(server.namespace)
                 if srv_group is not None:
                     # Server is in a named group
                     group_id = _escape_dot_label(srv_group)
-                    lines.append(f'  "{group_id}" -> "{act_id}" [label="serve", style=dotted];')
+                    lines.append(f"  {_action_serve_edge(group_id, act_id)}")
                 else:
                     # Server is a root namespace node
                     node_id = _escape_dot_label(server.fqn)
-                    lines.append(f'  "{node_id}" -> "{act_id}" [label="serve", style=dotted];')
+                    lines.append(f"  {_action_serve_edge(node_id, act_id)}")
 
             for client in action.clients:
                 client_group = extract_group_name(client.namespace)
                 if client_group is not None:
                     # Client is in a named group
                     group_id = _escape_dot_label(client_group)
-                    lines.append(f'  "{act_id}" -> "{group_id}" [label="call", style=dotted, dir=back];')
+                    lines.append(f"  {_action_call_edge(group_id, act_id)}")
                 else:
                     # Client is a root namespace node
                     node_id = _escape_dot_label(client.fqn)
-                    lines.append(f'  "{act_id}" -> "{node_id}" [label="call", style=dotted, dir=back];')
+                    lines.append(f"  {_action_call_edge(node_id, act_id)}")
 
         lines.append("")
 
@@ -485,7 +525,6 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
     # Build the graph
     lines = [f"digraph ROS2Group_{cluster_name} {{"]
     lines.append("  rankdir=LR;")
-    lines.append("  ranksep=2.0;")
     lines.append("  node [shape=box];")
     lines.append(f'  label="Group: {display_name}";')
     lines.append("  labelloc=t;")
@@ -503,7 +542,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
     for node in group_nodes:
         node_id = _escape_dot_label(node.fqn)
         label = f"{node.fqn}\\n({node.package})"
-        lines.append(f'    "{node_id}" [label="{_escape_dot_label(label)}", style=filled, fillcolor=lightblue];')
+        lines.append(f"    {_ros_node_attrs(node_id, label)}")
 
     # Add internal topics inside cluster
     if internal_topics:
@@ -512,9 +551,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         for topic in internal_topics:
             topic_id = _escape_dot_label(topic.name)
             label = f"{topic.name}\\n[{topic.msg_type}]"
-            lines.append(
-                f'    "{topic_id}" [label="{_escape_dot_label(label)}", shape=ellipse, style=filled, fillcolor=lightgreen];'
-            )
+            lines.append(f"    {_topic_node_attrs(topic_id, label)}")
 
     # Add internal services inside cluster
     if internal_services:
@@ -523,9 +560,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         for service in internal_services:
             svc_id = _escape_dot_label(service.name)
             label = f"{service.name}\\n[{service.srv_type}]"
-            lines.append(
-                f'    "{svc_id}" [label="{_escape_dot_label(label)}", shape=diamond, style=filled, fillcolor=lightyellow];'
-            )
+            lines.append(f"    {_service_node_attrs(svc_id, label)}")
 
     # Add internal actions inside cluster
     if internal_actions:
@@ -534,9 +569,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         for action in internal_actions:
             act_id = _escape_dot_label(action.name)
             label = f"{action.name}\\n[{action.action_type}]"
-            lines.append(
-                f'    "{act_id}" [label="{_escape_dot_label(label)}", shape=hexagon, style=filled, fillcolor=lightcoral];'
-            )
+            lines.append(f"    {_action_node_attrs(act_id, label)}")
 
     lines.append("  }")
     lines.append("")
@@ -547,9 +580,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         for topic in external_topics:
             topic_id = _escape_dot_label(topic.name)
             label = f"{topic.name}\\n[{topic.msg_type}]"
-            lines.append(
-                f'  "{topic_id}" [label="{_escape_dot_label(label)}", shape=ellipse, style=filled, fillcolor=lightgreen];'
-            )
+            lines.append(f"  {_topic_node_attrs(topic_id, label)}")
         lines.append("")
 
     # Add external services outside cluster
@@ -558,9 +589,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         for service in external_services:
             svc_id = _escape_dot_label(service.name)
             label = f"{service.name}\\n[{service.srv_type}]"
-            lines.append(
-                f'  "{svc_id}" [label="{_escape_dot_label(label)}", shape=diamond, style=filled, fillcolor=lightyellow];'
-            )
+            lines.append(f"  {_service_node_attrs(svc_id, label)}")
         lines.append("")
 
     # Add external actions outside cluster
@@ -569,9 +598,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         for action in external_actions:
             act_id = _escape_dot_label(action.name)
             label = f"{action.name}\\n[{action.action_type}]"
-            lines.append(
-                f'  "{act_id}" [label="{_escape_dot_label(label)}", shape=hexagon, style=filled, fillcolor=lightcoral];'
-            )
+            lines.append(f"  {_action_node_attrs(act_id, label)}")
         lines.append("")
 
     # Add edges for internal topics
@@ -581,10 +608,10 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
             topic_id = _escape_dot_label(topic.name)
             for pub in topic.publishers:
                 pub_id = _escape_dot_label(pub.fqn)
-                lines.append(f'  "{pub_id}" -> "{topic_id}" [label="pub"];')
+                lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
             for sub in topic.subscribers:
                 sub_id = _escape_dot_label(sub.fqn)
-                lines.append(f'  "{topic_id}" -> "{sub_id}" [label="sub"];')
+                lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
         lines.append("")
 
     # Add edges for external topics (only for nodes in this group)
@@ -595,11 +622,11 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
             for pub in topic.publishers:
                 if pub.fqn in node_fqns:
                     pub_id = _escape_dot_label(pub.fqn)
-                    lines.append(f'  "{pub_id}" -> "{topic_id}" [label="pub"];')
+                    lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
             for sub in topic.subscribers:
                 if sub.fqn in node_fqns:
                     sub_id = _escape_dot_label(sub.fqn)
-                    lines.append(f'  "{topic_id}" -> "{sub_id}" [label="sub"];')
+                    lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
         lines.append("")
 
     # Add edges for internal services
@@ -609,10 +636,10 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
             svc_id = _escape_dot_label(service.name)
             for prov in service.providers:
                 prov_id = _escape_dot_label(prov.fqn)
-                lines.append(f'  "{prov_id}" -> "{svc_id}" [label="provide", style=dashed];')
+                lines.append(f"  {_service_provide_edge(prov_id, svc_id)}")
             for client in service.clients:
                 client_id = _escape_dot_label(client.fqn)
-                lines.append(f'  "{svc_id}" -> "{client_id}" [label="call", style=dashed, dir=back];')
+                lines.append(f"  {_service_call_edge(client_id, svc_id)}")
         lines.append("")
 
     # Add edges for external services (only for nodes in this group)
@@ -623,11 +650,11 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
             for prov in service.providers:
                 if prov.fqn in node_fqns:
                     prov_id = _escape_dot_label(prov.fqn)
-                    lines.append(f'  "{prov_id}" -> "{svc_id}" [label="provide", style=dashed];')
+                    lines.append(f"  {_service_provide_edge(prov_id, svc_id)}")
             for client in service.clients:
                 if client.fqn in node_fqns:
                     client_id = _escape_dot_label(client.fqn)
-                    lines.append(f'  "{svc_id}" -> "{client_id}" [label="call", style=dashed, dir=back];')
+                    lines.append(f"  {_service_call_edge(client_id, svc_id)}")
         lines.append("")
 
     # Add edges for internal actions
@@ -637,10 +664,10 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
             act_id = _escape_dot_label(action.name)
             for srv in action.servers:
                 srv_id = _escape_dot_label(srv.fqn)
-                lines.append(f'  "{srv_id}" -> "{act_id}" [label="serve", style=dotted];')
+                lines.append(f"  {_action_serve_edge(srv_id, act_id)}")
             for client in action.clients:
                 client_id = _escape_dot_label(client.fqn)
-                lines.append(f'  "{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];')
+                lines.append(f"  {_action_call_edge(client_id, act_id)}")
         lines.append("")
 
     # Add edges for external actions (only for nodes in this group)
@@ -651,11 +678,11 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
             for srv in action.servers:
                 if srv.fqn in node_fqns:
                     srv_id = _escape_dot_label(srv.fqn)
-                    lines.append(f'  "{srv_id}" -> "{act_id}" [label="serve", style=dotted];')
+                    lines.append(f"  {_action_serve_edge(srv_id, act_id)}")
             for client in action.clients:
                 if client.fqn in node_fqns:
                     client_id = _escape_dot_label(client.fqn)
-                    lines.append(f'  "{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];')
+                    lines.append(f"  {_action_call_edge(client_id, act_id)}")
         lines.append("")
 
     lines.append("}")
