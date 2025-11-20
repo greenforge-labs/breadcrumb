@@ -109,6 +109,19 @@ def _escape_dot_label(text: str) -> str:
     return text.replace('"', '\\"').replace("\n", "\\n")
 
 
+def _sanitize_dot_id(text: str) -> str:
+    """Sanitize text to create valid DOT identifier (for cluster/node names)."""
+    # Replace invalid characters with underscores
+    return (
+        text.replace("/", "_")
+        .replace(" ", "_")
+        .replace("-", "_")
+        .replace(".", "_")
+        .replace("::", "_")
+        .replace(":", "_")
+    )
+
+
 def _topic_node_attrs(topic_id: str, label: str) -> str:
     """Generate DOT node attributes for a topic node."""
     escaped_label = _escape_dot_label(label)
@@ -163,9 +176,71 @@ def _action_call_edge(client_id: str, act_id: str) -> str:
     return f'"{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];'
 
 
+def _categorize_entities_by_node(
+    graph: Graph,
+) -> tuple[
+    dict[str, list[Topic]],  # node_fqn -> owned topics (single publisher)
+    list[Topic],  # shared topics (0 or multiple publishers)
+    dict[str, list[Service]],  # node_fqn -> owned services (single provider)
+    list[Service],  # shared services (0 or multiple providers)
+    dict[str, list[Action]],  # node_fqn -> owned actions (single server)
+    list[Action],  # shared actions (0 or multiple servers)
+]:
+    """
+    Categorize topics, services, and actions by their providers.
+
+    Single-provider entities are assigned to their provider node.
+    Multi-provider or no-provider entities are returned as shared.
+
+    Returns:
+        Tuple of (owned_topics, shared_topics, owned_services, shared_services,
+                  owned_actions, shared_actions)
+    """
+    owned_topics: dict[str, list[Topic]] = {}
+    shared_topics: list[Topic] = []
+
+    for topic in graph.topics:
+        if len(topic.publishers) == 1:
+            node_fqn = topic.publishers[0].fqn
+            if node_fqn not in owned_topics:
+                owned_topics[node_fqn] = []
+            owned_topics[node_fqn].append(topic)
+        else:
+            shared_topics.append(topic)
+
+    owned_services: dict[str, list[Service]] = {}
+    shared_services: list[Service] = []
+
+    for service in graph.services:
+        if len(service.providers) == 1:
+            node_fqn = service.providers[0].fqn
+            if node_fqn not in owned_services:
+                owned_services[node_fqn] = []
+            owned_services[node_fqn].append(service)
+        else:
+            shared_services.append(service)
+
+    owned_actions: dict[str, list[Action]] = {}
+    shared_actions: list[Action] = []
+
+    for action in graph.actions:
+        if len(action.servers) == 1:
+            node_fqn = action.servers[0].fqn
+            if node_fqn not in owned_actions:
+                owned_actions[node_fqn] = []
+            owned_actions[node_fqn].append(action)
+        else:
+            shared_actions.append(action)
+
+    return owned_topics, shared_topics, owned_services, shared_services, owned_actions, shared_actions
+
+
 def serialize_to_dot(graph: Graph) -> str:
     """
-    Serialize a Graph object to GraphViz DOT format.
+    Serialize a Graph object to GraphViz DOT format with node-centric clustering.
+
+    Each node is placed in its own subgraph cluster along with topics/services/actions
+    that it exclusively provides. Shared or orphaned entities are placed outside clusters.
 
     Args:
         graph: Graph object to serialize
@@ -178,66 +253,112 @@ def serialize_to_dot(graph: Graph) -> str:
     lines.append("  node [shape=box];")
     lines.append("")
 
-    # Add nodes
-    lines.append("  // Nodes")
+    # Categorize entities by ownership
+    (
+        owned_topics,
+        shared_topics,
+        owned_services,
+        shared_services,
+        owned_actions,
+        shared_actions,
+    ) = _categorize_entities_by_node(graph)
+
+    # Create clusters for each node with its owned entities
     for node in graph.nodes:
         node_id = _escape_dot_label(node.fqn)
+        node_fqn = node.fqn
+        cluster_name = f"cluster_{_sanitize_dot_id(node.fqn)}"
+
+        lines.append(f"  subgraph {cluster_name} {{")
+        lines.append(f'    label="{_escape_dot_label(node.fqn)}";')
+        lines.append("    style=filled;")
+        lines.append("    fillcolor=lightgrey;")
+        lines.append("")
+
+        # Add the node itself
         label = f"{node.fqn}\\n({node.package})"
-        lines.append(f"  {_ros_node_attrs(node_id, label)}")
+        lines.append(f"    {_ros_node_attrs(node_id, label)}")
 
-    lines.append("")
+        # Add owned topics
+        if node_fqn in owned_topics:
+            for topic in owned_topics[node_fqn]:
+                topic_id = _escape_dot_label(topic.name)
+                label = f"{topic.name}\\n[{topic.msg_type}]"
+                lines.append(f"    {_topic_node_attrs(topic_id, label)}")
 
-    # Add topics as separate nodes
-    lines.append("  // Topics")
+        # Add owned services
+        if node_fqn in owned_services:
+            for service in owned_services[node_fqn]:
+                svc_id = _escape_dot_label(service.name)
+                label = f"{service.name}\\n[{service.srv_type}]"
+                lines.append(f"    {_service_node_attrs(svc_id, label)}")
+
+        # Add owned actions
+        if node_fqn in owned_actions:
+            for action in owned_actions[node_fqn]:
+                act_id = _escape_dot_label(action.name)
+                label = f"{action.name}\\n[{action.action_type}]"
+                lines.append(f"    {_action_node_attrs(act_id, label)}")
+
+        lines.append("  }")
+        lines.append("")
+
+    # Add shared/orphaned topics
+    if shared_topics:
+        lines.append("  // Shared Topics")
+        for topic in shared_topics:
+            topic_id = _escape_dot_label(topic.name)
+            label = f"{topic.name}\\n[{topic.msg_type}]"
+            lines.append(f"  {_topic_node_attrs(topic_id, label)}")
+        lines.append("")
+
+    # Add shared/orphaned services
+    if shared_services:
+        lines.append("  // Shared Services")
+        for service in shared_services:
+            svc_id = _escape_dot_label(service.name)
+            label = f"{service.name}\\n[{service.srv_type}]"
+            lines.append(f"  {_service_node_attrs(svc_id, label)}")
+        lines.append("")
+
+    # Add shared/orphaned actions
+    if shared_actions:
+        lines.append("  // Shared Actions")
+        for action in shared_actions:
+            act_id = _escape_dot_label(action.name)
+            label = f"{action.name}\\n[{action.action_type}]"
+            lines.append(f"  {_action_node_attrs(act_id, label)}")
+        lines.append("")
+
+    # Add all edges (edges can cross cluster boundaries)
+    lines.append("  // Topic Edges")
     for topic in graph.topics:
         topic_id = _escape_dot_label(topic.name)
-        label = f"{topic.name}\\n[{topic.msg_type}]"
-        lines.append(f"  {_topic_node_attrs(topic_id, label)}")
-
-        # Connect publishers to topic
         for pub in topic.publishers:
             pub_id = _escape_dot_label(pub.fqn)
             lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
-
-        # Connect topic to subscribers
         for sub in topic.subscribers:
             sub_id = _escape_dot_label(sub.fqn)
             lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
-
     lines.append("")
 
-    # Add services
-    lines.append("  // Services")
+    lines.append("  // Service Edges")
     for service in graph.services:
         svc_id = _escape_dot_label(service.name)
-        label = f"{service.name}\\n[{service.srv_type}]"
-        lines.append(f"  {_service_node_attrs(svc_id, label)}")
-
-        # Connect providers to service
         for provider in service.providers:
             prov_id = _escape_dot_label(provider.fqn)
             lines.append(f"  {_service_provide_edge(prov_id, svc_id)}")
-
-        # Connect service to clients
         for client in service.clients:
             client_id = _escape_dot_label(client.fqn)
             lines.append(f"  {_service_call_edge(client_id, svc_id)}")
-
     lines.append("")
 
-    # Add actions
-    lines.append("  // Actions")
+    lines.append("  // Action Edges")
     for action in graph.actions:
         act_id = _escape_dot_label(action.name)
-        label = f"{action.name}\\n[{action.action_type}]"
-        lines.append(f"  {_action_node_attrs(act_id, label)}")
-
-        # Connect servers to action
         for server in action.servers:
             srv_id = _escape_dot_label(server.fqn)
             lines.append(f"  {_action_serve_edge(srv_id, act_id)}")
-
-        # Connect action to clients
         for client in action.clients:
             client_id = _escape_dot_label(client.fqn)
             lines.append(f"  {_action_call_edge(client_id, act_id)}")
