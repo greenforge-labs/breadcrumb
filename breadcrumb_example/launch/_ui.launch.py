@@ -10,7 +10,7 @@ def generate_launch_description():
         "cartpole_ui",
         parameters={
             "webserver_port": 3000,
-            "controller_node_name": "control.cartpole_controller",
+            "controller_node_name": "control/cartpole_controller",
         },
         remappings={
             "joint_states": "/hardware/joint_states",

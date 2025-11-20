@@ -290,6 +290,7 @@
                         <input type="number" id="k4" value="0.0" step="0.1">
                     </div>
                 </div>
+                <button class="btn-primary" onclick="getCurrentParameters()">Get Current Parameters</button>
                 <button class="btn-primary" onclick="updateParameters()">Update Parameters</button>
             </div>
         </div>
@@ -402,6 +403,23 @@
                 const result = await response.json();
                 if (!result.success) {
                     console.error('Failed to send goal:', result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function getCurrentParameters() {
+            try {
+                const response = await fetch('/api/get_params');
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('k1').value = result.k1.toFixed(2);
+                    document.getElementById('k2').value = result.k2.toFixed(2);
+                    document.getElementById('k3').value = result.k3.toFixed(2);
+                    document.getElementById('k4').value = result.k4.toFixed(2);
+                } else {
+                    console.error('Failed to get parameters:', result.error);
                 }
             } catch (error) {
                 console.error('Error:', error);

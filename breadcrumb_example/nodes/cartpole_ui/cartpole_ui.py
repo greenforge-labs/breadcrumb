@@ -15,8 +15,10 @@ from flask import Flask, Response, jsonify, render_template, request
 from rclpy.parameter import Parameter
 from werkzeug.serving import run_simple
 
+from rcl_interfaces.msg import ParameterType
 from sensor_msgs.msg import JointState
 
+from rcl_interfaces.srv import GetParameters, SetParameters
 from std_srvs.srv import SetBool, Trigger
 
 from breadcrumb_example_interfaces.action import TrackPosition
@@ -233,6 +235,63 @@ def create_app(ctx: Context) -> Flask:
             f"Position tracking complete: success={result.success}, " f"final_position={result.final_position:.3f}"
         )
 
+    @app.route("/api/get_params", methods=["GET"])
+    def get_controller_params():
+        """Get current controller parameters."""
+        try:
+            # Create parameter client for the controller node
+            param_client = ctx.node.create_client(GetParameters, f"/{ctx.params.controller_node_name}/get_parameters")
+
+            # Wait for service to be available
+            if not param_client.wait_for_service(timeout_sec=2.0):
+                ctx.logger.error("Parameter service not available")
+                return jsonify({"success": False, "error": "Service not available"}), 503
+
+            # Build GetParameters request
+            req = GetParameters.Request()
+            req.names = ["k1", "k2", "k3", "k4"]
+
+            # Call service
+            future = param_client.call_async(req)
+
+            # Wait for the future to complete with polling
+            timeout = 2.0
+            start_time = time.time()
+            while not future.done():
+                if time.time() - start_time > timeout:
+                    ctx.logger.error("Parameter get timed out")
+                    return jsonify({"success": False, "error": "Request timed out"}), 504
+                time.sleep(0.01)  # Small sleep to avoid busy-waiting
+
+            response = future.result()
+
+            # Parse the parameter values
+            params = {}
+            for i, name in enumerate(req.names):
+                if i < len(response.values):
+                    param_value = response.values[i]
+                    if param_value.type == ParameterType.PARAMETER_DOUBLE:
+                        params[name] = param_value.double_value
+                    else:
+                        ctx.logger.warn(f"Parameter {name} is not a double")
+                        params[name] = 0.0
+                else:
+                    params[name] = 0.0
+
+            ctx.logger.info(f"Retrieved parameters: {params}")
+            return jsonify(
+                {
+                    "success": True,
+                    "k1": params.get("k1", 0.0),
+                    "k2": params.get("k2", 0.0),
+                    "k3": params.get("k3", 0.0),
+                    "k4": params.get("k4", 0.0),
+                }
+            )
+        except Exception as e:
+            ctx.logger.error(f"Failed to get parameters: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
     @app.route("/api/set_params", methods=["POST"])
     def set_controller_params():
         """Update controller parameters dynamically."""
@@ -253,20 +312,16 @@ def create_app(ctx: Context) -> Flask:
             if not params:
                 return jsonify({"success": False, "error": "No parameters provided"}), 400
 
-            # Set parameters on controller node
-            from rclpy.parameter import parameter_dict_from_yaml_file
+            # Create parameter client for the controller node
+            param_client = ctx.node.create_client(SetParameters, f"/{ctx.params.controller_node_name}/set_parameters")
 
-            param_client = ctx.node.create_client(
-                "rcl_interfaces/srv/SetParameters", f"/{ctx.params.controller_node_name}/set_parameters"
-            )
+            # Build SetParameters request
+            req = SetParameters.Request()
+            req.parameters = [p.to_parameter_msg() for p in params]
 
-            # For simplicity, we'll log the request
-            # A full implementation would wait for the service and handle the response
+            # Call service (fire and forget for simplicity)
+            future = param_client.call_async(req)
             ctx.logger.info(f"Parameter update requested: {data}")
-
-            # Note: Proper parameter client usage requires waiting for service availability
-            # and handling the async response. For this demo, we're keeping it simple.
-            # In production, use: https://docs.ros.org/en/rolling/Tutorials/Beginner-Client-Libraries/Using-Parameters-In-A-Class-Python.html
 
             return jsonify({"success": True, "params": data})
         except Exception as e:
