@@ -21,10 +21,6 @@ from std_srvs.srv import SetBool, Trigger
 
 from breadcrumb_example_interfaces.action import TrackPosition
 
-# Flask app setup
-TEMPLATE_DIR = Path(get_package_share_directory("breadcrumb_example")) / "web_templates"
-app = Flask(__name__, template_folder=TEMPLATE_DIR)
-
 
 @dataclass
 class Context(CartpoleUiContext):
@@ -51,14 +47,9 @@ class Context(CartpoleUiContext):
     web_update_rate: float = 0.05  # 20 Hz max (50ms between updates)
 
 
-# Global context reference (for Flask routes)
-ctx_global: Context | None = None
-
-
 def joint_states_callback(ctx: Context, msg: JointState):
     """Callback for joint_states updates - with rate limiting."""
-    # joint_states has: position[0] = cart, position[1] = pole
-    # velocity[0] = cart_vel, velocity[1] = pole_vel
+    # joint_states has: position[0] = cart, position[1] = pole, velocity[0] = cart_vel, velocity[1] = pole_vel
 
     current_time = time.time()
 
@@ -111,196 +102,189 @@ def joint_states_callback(ctx: Context, msg: JointState):
             ctx.web_clients.remove(client)
 
 
-# ===== Flask Routes =====
+def create_app(ctx: Context) -> Flask:
+    """Create Flask app with routes as closures over context."""
+    app = Flask(
+        __name__,
+        template_folder=Path(get_package_share_directory("breadcrumb_example")) / "web_templates",
+    )
 
+    @app.route("/")
+    def index():
+        """Serve the dashboard HTML."""
+        return render_template("dashboard.html")
 
-@app.route("/")
-def index():
-    """Serve the dashboard HTML."""
-    return render_template("dashboard.html")
+    @app.route("/events")
+    def sse():
+        """Server-Sent Events endpoint for real-time updates."""
 
+        def event_stream():
+            from queue import Empty
 
-@app.route("/events")
-def sse():
-    """Server-Sent Events endpoint for real-time updates."""
+            q = Queue(maxsize=5)  # Smaller queue to prevent memory buildup
+            ctx.web_clients.append(q)
+            ctx.logger.info(f"SSE client connected. Total clients: {len(ctx.web_clients)}")
 
-    def event_stream():
-        from queue import Empty
+            try:
+                while True:
+                    try:
+                        # Use timeout to send keepalive and detect disconnections
+                        data = q.get(timeout=5.0)
+                        yield f"data: {json.dumps(data)}\n\n"
+                    except Empty:
+                        # Timeout - send keepalive comment to detect disconnections
+                        yield ": keepalive\n\n"
+            finally:
+                # Clean up this client's queue (always runs on disconnect)
+                if q in ctx.web_clients:
+                    ctx.web_clients.remove(q)
+                ctx.logger.info(f"SSE client disconnected. Total clients: {len(ctx.web_clients)}")
 
-        q = Queue(maxsize=5)  # Smaller queue to prevent memory buildup
-        ctx_global.web_clients.append(q)
-        ctx_global.logger.info(f"SSE client connected. Total clients: {len(ctx_global.web_clients)}")
+        return Response(event_stream(), mimetype="text/event-stream")
 
+    @app.route("/api/enable", methods=["POST"])
+    def enable_controller():
+        """Enable or disable the controller."""
         try:
-            while True:
-                try:
-                    # Use timeout to send keepalive and detect disconnections
-                    data = q.get(timeout=5.0)
-                    yield f"data: {json.dumps(data)}\n\n"
-                except Empty:
-                    # Timeout - send keepalive comment to detect disconnections
-                    yield ": keepalive\n\n"
-        finally:
-            # Clean up this client's queue (always runs on disconnect)
-            if q in ctx_global.web_clients:
-                ctx_global.web_clients.remove(q)
-            ctx_global.logger.info(f"SSE client disconnected. Total clients: {len(ctx_global.web_clients)}")
+            data = request.get_json()
+            enable = data.get("enable", False)
 
-    return Response(event_stream(), mimetype="text/event-stream")
+            # Call the enable service
+            req = SetBool.Request()
+            req.data = enable
 
+            future = ctx.service_clients.enable_controller.call_async(req)
+            # Note: In a production system, you'd wait for the future with a timeout
+            # For simplicity, we're fire-and-forget here
 
-@app.route("/api/enable", methods=["POST"])
-def enable_controller():
-    """Enable or disable the controller."""
-    try:
-        data = request.get_json()
-        enable = data.get("enable", False)
+            ctx.logger.info(f"Controller {'enabled' if enable else 'disabled'}")
+            return jsonify({"success": True, "enabled": enable})
+        except Exception as e:
+            ctx.logger.error(f"Failed to enable/disable controller: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
 
-        # Call the enable service
-        req = SetBool.Request()
-        req.data = enable
+    @app.route("/api/reset", methods=["POST"])
+    def reset_simulator():
+        """Reset the simulator."""
+        try:
+            req = Trigger.Request()
+            future = ctx.service_clients.reset_simulator.call_async(req)
+            # Note: In a production system, you'd wait for the future with a timeout
+            # For simplicity, we're fire-and-forget here
 
-        future = ctx_global.service_clients.enable_controller.call_async(req)
-        # Note: In a production system, you'd wait for the future with a timeout
-        # For simplicity, we're fire-and-forget here
+            ctx.logger.info("Simulator reset requested")
+            return jsonify({"success": True})
+        except Exception as e:
+            ctx.logger.error(f"Failed to reset simulator: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
 
-        ctx_global.logger.info(f"Controller {'enabled' if enable else 'disabled'}")
-        return jsonify({"success": True, "enabled": enable})
-    except Exception as e:
-        ctx_global.logger.error(f"Failed to enable/disable controller: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+    @app.route("/api/track_position", methods=["POST"])
+    def track_position():
+        """Send a position tracking goal to the controller."""
+        try:
+            data = request.get_json()
+            target_position = float(data.get("target_position", 0.0))
+            goal_tolerance = float(data.get("goal_tolerance", 0.05))
 
+            # Create action goal
+            goal_msg = TrackPosition.Goal()
+            goal_msg.target_position = target_position
+            goal_msg.goal_tolerance = goal_tolerance
 
-@app.route("/api/reset", methods=["POST"])
-def reset_simulator():
-    """Reset the simulator."""
-    try:
-        req = Trigger.Request()
-        future = ctx_global.service_clients.reset_simulator.call_async(req)
-        # Note: In a production system, you'd wait for the future with a timeout
-        # For simplicity, we're fire-and-forget here
+            # Send goal
+            ctx.tracking_goal = True
+            send_goal_future = ctx.action_clients.track_position.send_goal_async(
+                goal_msg, feedback_callback=track_position_feedback
+            )
+            send_goal_future.add_done_callback(track_position_response)
 
-        ctx_global.logger.info("Simulator reset requested")
-        return jsonify({"success": True})
-    except Exception as e:
-        ctx_global.logger.error(f"Failed to reset simulator: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+            ctx.logger.info(f"Tracking position goal sent: {target_position}")
+            return jsonify({"success": True, "target": target_position})
+        except Exception as e:
+            ctx.logger.error(f"Failed to send tracking goal: {e}")
+            ctx.tracking_goal = False
+            return jsonify({"success": False, "error": str(e)}), 500
 
-
-@app.route("/api/track_position", methods=["POST"])
-def track_position():
-    """Send a position tracking goal to the controller."""
-    try:
-        data = request.get_json()
-        target_position = float(data.get("target_position", 0.0))
-        goal_tolerance = float(data.get("goal_tolerance", 0.05))
-
-        # Create action goal
-        goal_msg = TrackPosition.Goal()
-        goal_msg.target_position = target_position
-        goal_msg.goal_tolerance = goal_tolerance
-
-        # Send goal
-        ctx_global.tracking_goal = True
-        send_goal_future = ctx_global.action_clients.track_position.send_goal_async(
-            goal_msg, feedback_callback=track_position_feedback
-        )
-        send_goal_future.add_done_callback(track_position_response)
-
-        ctx_global.logger.info(f"Tracking position goal sent: {target_position}")
-        return jsonify({"success": True, "target": target_position})
-    except Exception as e:
-        ctx_global.logger.error(f"Failed to send tracking goal: {e}")
-        ctx_global.tracking_goal = False
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-def track_position_feedback(feedback_msg):
-    """Handle action feedback."""
-    feedback = feedback_msg.feedback
-    ctx_global.logger.info(
-        f"Position tracking feedback: current={feedback.current_position:.3f}, "
-        f"distance={feedback.distance_to_goal:.3f}"
-    )
-
-
-def track_position_response(future):
-    """Handle action goal response."""
-    goal_handle = future.result()
-    if not goal_handle.accepted:
-        ctx_global.logger.warn("Position tracking goal rejected")
-        ctx_global.tracking_goal = False
-        return
-
-    ctx_global.logger.info("Position tracking goal accepted")
-    result_future = goal_handle.get_result_async()
-    result_future.add_done_callback(track_position_result)
-
-
-def track_position_result(future):
-    """Handle action result."""
-    result = future.result().result
-    ctx_global.tracking_goal = False
-    ctx_global.logger.info(
-        f"Position tracking complete: success={result.success}, " f"final_position={result.final_position:.3f}"
-    )
-
-
-@app.route("/api/set_params", methods=["POST"])
-def set_controller_params():
-    """Update controller parameters dynamically."""
-    try:
-        data = request.get_json()
-
-        # Build parameter list
-        params = []
-        if "k1" in data:
-            params.append(Parameter("k1", Parameter.Type.DOUBLE, float(data["k1"])))
-        if "k2" in data:
-            params.append(Parameter("k2", Parameter.Type.DOUBLE, float(data["k2"])))
-        if "k3" in data:
-            params.append(Parameter("k3", Parameter.Type.DOUBLE, float(data["k3"])))
-        if "k4" in data:
-            params.append(Parameter("k4", Parameter.Type.DOUBLE, float(data["k4"])))
-
-        if not params:
-            return jsonify({"success": False, "error": "No parameters provided"}), 400
-
-        # Set parameters on controller node
-        from rclpy.parameter import parameter_dict_from_yaml_file
-
-        param_client = ctx_global.node.create_client(
-            "rcl_interfaces/srv/SetParameters", f"/{ctx_global.params.controller_node_name}/set_parameters"
+    def track_position_feedback(feedback_msg):
+        """Handle action feedback."""
+        feedback = feedback_msg.feedback
+        ctx.logger.info(
+            f"Position tracking feedback: current={feedback.current_position:.3f}, "
+            f"distance={feedback.distance_to_goal:.3f}"
         )
 
-        # For simplicity, we'll log the request
-        # A full implementation would wait for the service and handle the response
-        ctx_global.logger.info(f"Parameter update requested: {data}")
+    def track_position_response(future):
+        """Handle action goal response."""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            ctx.logger.warn("Position tracking goal rejected")
+            ctx.tracking_goal = False
+            return
 
-        # Note: Proper parameter client usage requires waiting for service availability
-        # and handling the async response. For this demo, we're keeping it simple.
-        # In production, use: https://docs.ros.org/en/rolling/Tutorials/Beginner-Client-Libraries/Using-Parameters-In-A-Class-Python.html
+        ctx.logger.info("Position tracking goal accepted")
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(track_position_result)
 
-        return jsonify({"success": True, "params": data})
-    except Exception as e:
-        ctx_global.logger.error(f"Failed to set parameters: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+    def track_position_result(future):
+        """Handle action result."""
+        result = future.result().result
+        ctx.tracking_goal = False
+        ctx.logger.info(
+            f"Position tracking complete: success={result.success}, " f"final_position={result.final_position:.3f}"
+        )
 
+    @app.route("/api/set_params", methods=["POST"])
+    def set_controller_params():
+        """Update controller parameters dynamically."""
+        try:
+            data = request.get_json()
 
-# ===== ROS Node Initialization =====
+            # Build parameter list
+            params = []
+            if "k1" in data:
+                params.append(Parameter("k1", Parameter.Type.DOUBLE, float(data["k1"])))
+            if "k2" in data:
+                params.append(Parameter("k2", Parameter.Type.DOUBLE, float(data["k2"])))
+            if "k3" in data:
+                params.append(Parameter("k3", Parameter.Type.DOUBLE, float(data["k3"])))
+            if "k4" in data:
+                params.append(Parameter("k4", Parameter.Type.DOUBLE, float(data["k4"])))
+
+            if not params:
+                return jsonify({"success": False, "error": "No parameters provided"}), 400
+
+            # Set parameters on controller node
+            from rclpy.parameter import parameter_dict_from_yaml_file
+
+            param_client = ctx.node.create_client(
+                "rcl_interfaces/srv/SetParameters", f"/{ctx.params.controller_node_name}/set_parameters"
+            )
+
+            # For simplicity, we'll log the request
+            # A full implementation would wait for the service and handle the response
+            ctx.logger.info(f"Parameter update requested: {data}")
+
+            # Note: Proper parameter client usage requires waiting for service availability
+            # and handling the async response. For this demo, we're keeping it simple.
+            # In production, use: https://docs.ros.org/en/rolling/Tutorials/Beginner-Client-Libraries/Using-Parameters-In-A-Class-Python.html
+
+            return jsonify({"success": True, "params": data})
+        except Exception as e:
+            ctx.logger.error(f"Failed to set parameters: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    return app
 
 
 def run_webserver(ctx: Context):
     """Run Flask webserver in separate thread (tracked by cake)."""
-    global ctx_global
-    ctx_global = ctx
-
     ctx.logger.info(f"Starting webserver on port {ctx.params.webserver_port}")
 
+    # Create and run app with routes as closures over context
     run_simple(
         "0.0.0.0",
         ctx.params.webserver_port,
-        app,
+        create_app(ctx),
         threaded=True,
         use_reloader=False,
         use_debugger=False,
@@ -310,9 +294,6 @@ def run_webserver(ctx: Context):
 
 def init(ctx: Context):
     """Initialize the cartpole UI node."""
-    global ctx_global
-    ctx_global = ctx
-
     # Set up ROS callbacks
     ctx.subscribers.joint_states.set_callback(joint_states_callback)
 
