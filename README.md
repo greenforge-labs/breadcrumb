@@ -6,6 +6,9 @@ A ROS2 graph static analysis tool that works with cake and clingwrap.
 
 **breadcrumb** analyzes ROS2 launch files without running your system, extracting and visualizing the complete communication graph of nodes, topics, services, and actions. It's built on top of the [clingwrap](https://github.com/greenforge-labs/clingwrap) static analysis system and [cake](https://github.com/greenforge-labs/cake) node interface definition file format.
 
+![breadcrumb example graph visualisation](./breadcrumb_example/ros_graphs/graph_full_system.svg)
+*An example graph visualisation (see [breadcrumb_example](./breadcrumb_example/README.md))*
+
 ### Key Benefits
 
 - **Static Analysis**: Understand your system architecture without launching nodes
@@ -38,6 +41,18 @@ breadcrumb my_robot.launch.py -o graph.dot --graph-type grouped_by_namespace
 # Include hidden entities (names starting with _)
 breadcrumb my_robot.launch.py --include-hidden
 ```
+
+## Example Package
+
+Want to see breadcrumb in action? Check out [breadcrumb_example](./breadcrumb_example/README.md), a complete ROS2 cartpole control system that demonstrates:
+
+- How cake, clingwrap, and breadcrumb work together
+- Mixed C++ and Python nodes with automatic code generation
+- Modular launch file architecture with namespace organization
+- Static graph analysis and visualization of the complete system
+- Real-time web dashboard for monitoring and control
+
+The example includes a working physics simulation, state feedback controller, and web UI - everything you need to understand how these tools integrate in a real application.
 
 ## How it works
 

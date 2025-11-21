@@ -1,268 +1,269 @@
 # breadcrumb_example
 
-A comprehensive example package demonstrating the integration of **cake**, **clingwrap**, and **breadcrumb** for ROS2 development and static analysis.
+A complete ROS2 cartpole (inverted pendulum) control system demonstrating the integration of [cake](https://github.com/greenforge-labs/cake), [clingwrap](https://github.com/greenforge-labs/clingwrap), and [breadcrumb](../) for building, launching, and visualizing ROS2 applications.
+
+![Demo](./demo.gif)
+
+![System Graph](./ros_graphs/graph_full_system.svg)
 
 ## Overview
 
-This package showcases:
-- **Cake**: Automatic code generation from YAML interface definitions
-- **Clingwrap**: Clean, Pythonic launch file syntax with static analysis
-- **Breadcrumb**: Graph visualization and analysis of ROS2 systems
+This example implements a simulated cart-pole system with a full state feedback controller and a real-time web dashboard. It demonstrates:
 
-## Package Structure
+- **cake**: Declarative node interface definitions with automatic code generation (C++ and Python)
+- **clingwrap**: Clean, modular launch file architecture with namespace management
+- **breadcrumb**: Static graph analysis and visualization of the complete system
 
-```
-breadcrumb_example/
-├── nodes/                      # Cake node definitions
-│   ├── sensor_driver/          # C++ node - publishes sensor data
-│   ├── data_processor/         # C++ composable node - processes data
-│   ├── monitor_node/           # Python node - monitors system
-│   └── controller/             # C++ node - action server
-├── interfaces/                 # External node interface definitions
-│   └── external_camera.yaml    # Example third-party node interface
-├── launch/                     # Clingwrap launch files
-│   ├── sensors.launch.py       # Sensor subsystem
-│   ├── processing.launch.py    # Processing subsystem
-│   └── full_system.launch.py   # Complete multi-robot system
-├── config/
-│   └── params.yaml             # Example parameters
-├── CMakeLists.txt              # Just 3 lines with cake_auto_package()!
-└── package.xml
-```
+The system consists of three nodes working together:
+1. **cartpole_simulator** - Physics simulation of an inverted pendulum on a sliding cart
+2. **cartpole_controller** - Full state feedback controller for balancing and position tracking
+3. **cartpole_ui** - Web-based dashboard for monitoring and control
 
-## Nodes
+## Quick Start
 
-### sensor_driver (C++)
-- **Publishers**: `sensor_data` (Temperature), `sensor_status` (String)
-- **Parameters**: `sensor_id`, `update_rate`, `frame_id`
-- **Description**: Simulates a temperature sensor with configurable update rate
+### Prerequisites
 
-### data_processor (C++ Composable)
-- **Subscribers**: `sensor_data` (Temperature)
-- **Publishers**: `processed_data` (Temperature), `alerts` (String)
-- **Services**: `get_statistics` (Trigger)
-- **Parameters**: `processing_enabled`, `threshold`
-- **Description**: Processes sensor data, tracks statistics, generates alerts
+Currently cake, clingwrap and breadcrumb are not published as apt packages, so you will need to clone all three into a workspace and build them.
 
-### monitor_node (Python)
-- **Subscribers**: `processed_data` (Temperature), `alerts` (String)
-- **Service Clients**: `get_statistics` (Trigger)
-- **Parameters**: `log_interval`
-- **Description**: Monitors system activity and periodically requests statistics
-
-### controller (C++)
-- **Publishers**: `cmd_vel` (Twist)
-- **Action Servers**: `navigate_to_pose` (NavigateToPose)
-- **Action Clients**: `compute_path_to_pose` (ComputePathToPose)
-- **Parameters**: `max_speed`
-- **Description**: Navigation controller with action server
-
-### external_camera (Interface Only)
-- **Package**: `vendor_camera_package` (hypothetical)
-- **Publishers**: `image_raw` (Image), `camera_info` (CameraInfo)
-- **Services**: `set_camera_info`, `start_capture`, `stop_capture`
-- **Description**: Example of defining an interface for an external node you don't control
-
-## Building
+### Launch
 
 ```bash
-cd ~/ros2_ws
-colcon build --packages-select breadcrumb_example
-source install/setup.bash
-```
-
-During the build, cake will:
-1. Generate C++ and Python interface code
-2. Generate parameter libraries
-3. Build executables and libraries
-4. **Install interface.yaml files to `share/breadcrumb_example/interfaces/`**
-5. Register C++ nodes as composable components
-
-## Running
-
-### Individual Subsystems
-
-```bash
-# Launch sensor subsystem
-ros2 launch breadcrumb_example sensors.launch.py
-
-# Launch processing subsystem
-ros2 launch breadcrumb_example processing.launch.py
-
-# Launch full multi-robot system
 ros2 launch breadcrumb_example full_system.launch.py
 ```
 
-### Individual Nodes
+### Access the Web UI
+
+Open your browser to: **http://localhost:3000**
+
+You should see:
+- Real-time state display (cart position, velocity, pole angle, angular velocity)
+- Controller enable/disable buttons
+- Position tracking controls
+- Parameter tuning interface for LQR gains
+
+### View in RViz
+
+RViz will launch automatically showing the 3D visualization of the cartpole system. The cart and pole will move in response to the controller commands.
+
+## Visualizing the System with breadcrumb
+
+One of the key features demonstrated here is breadcrumb's ability to analyze and visualize your ROS2 system **without running it**.
+
+### Generate Graph Files
 
 ```bash
-# Run sensor driver
-ros2 run breadcrumb_example sensor_driver
-
-# Run as composable component
-ros2 component standalone breadcrumb_example breadcrumb_example::SensorDriver
-
-# Run Python monitor node
-ros2 run breadcrumb_example monitor_node
+cd /ws/src/anvil/_src_extras/breadcrumb/breadcrumb_example
+breadcrumb launch/full_system.launch.py -o ros_graphs/graph.dot --graph-type grouped_and_full_system
 ```
 
-## Analyzing with Breadcrumb
-
-### Basic Analysis
-
-Analyze the sensor subsystem:
-```bash
-breadcrumb launch/sensors.launch.py
-```
-
-Output:
-```
-================================================================================
-Graph Analysis Complete
-================================================================================
-
-Nodes: 3
-Topics: 3
-Services: 0
-Actions: 0
-```
-
-### Generate JSON Output
+Or use the provided script:
 
 ```bash
-breadcrumb launch/full_system.launch.py -o system_graph.json
+./produce_graphs.sh
 ```
 
-### Generate GraphViz Visualization
+This generates multiple visualization files in `ros_graphs/`:
+- `graph_full_system.dot/.svg` - Complete system showing all nodes and connections
+- `graph_toplevel.dot/.svg` - High-level view of namespace groups
+- `graph_group_hardware.dot/.svg` - Detailed view of the /hardware namespace
+- `graph_group_control.dot/.svg` - Detailed view of the /control namespace
 
-#### Full System Graph
+### Render Graphs
 
-```bash
-breadcrumb launch/full_system.launch.py -o graph.dot --graph-type full_system
-dot -Tpng graph_full_system.dot -o graph.png
-```
-
-#### Grouped by Namespace
-
-This is particularly useful for multi-robot systems:
+To convert DOT files to images:
 
 ```bash
-breadcrumb launch/full_system.launch.py -o graph.dot --graph-type grouped_by_namespace
-```
+cd ros_graphs
+dot -Tsvg graph_full_system.dot -o graph_full_system.svg
+dot -Tpng graph_full_system.dot -o graph_full_system.png
 
-This generates:
-- `graph_toplevel.dot` - Shows robot1, robot2, and shared namespaces with inter-namespace communication
-- `graph_group_robot1.dot` - Detailed view of robot1's nodes and connections
-- `graph_group_robot2.dot` - Detailed view of robot2's nodes and connections
-- `graph_group_diagnostics.dot` - Diagnostics namespace (from topic relay)
-
-Render all graphs:
-```bash
+# Or render all at once
 for file in graph_*.dot; do
-    dot -Tpng "$file" -o "${file%.dot}.png"
+    dot -Tsvg "$file" -o "${file%.dot}.svg"
 done
 ```
 
-#### Both Views
+### Understanding the Graphs
 
-```bash
-breadcrumb launch/full_system.launch.py -o graph.dot --graph-type grouped_and_full_system
+The generated graphs show:
+- **Nodes** (blue rectangles): All 5 nodes in the system
+- **Topics** (green ellipses): Publishers and subscribers with message types
+- **Services** (yellow diamonds): Service providers and clients
+- **Actions** (red hexagons): Action servers and clients
+- **Namespace organization**: How nodes are grouped and communicate across namespaces
+
+## System Architecture
+
+### Nodes
+
+#### 1. cartpole_simulator (C++)
+**Location:** `nodes/cartpole_simulator/`
+
+Simulates the physics of a cart-pole system using classical mechanics equations.
+
+#### 2. cartpole_controller (C++)
+**Location:** `nodes/cartpole_controller/`
+
+Implements a full state feedback controller to balance the pole upright and track desired cart positions.
+
+Default gains computed from optimal control theory (see `scripts/compute_lqr_gains.py`).
+
+#### 3. cartpole_ui (Python)
+**Location:** `nodes/cartpole_ui/`
+
+Provides a real-time web dashboard using Flask with Server-Sent Events (SSE).
+
+### Namespace Organization
+
+- **`/hardware`** - Simulation and state publishing
+  - cartpole_simulator
+  - robot_state_publisher
+- **`/control`** - Controller logic
+  - cartpole_controller
+- **Root namespace** - UI and visualization
+  - cartpole_ui
+  - rviz2
+
+## Understanding the Code
+
+### Minimal CMakeLists.txt
+
+The entire package is built with just 5 lines of CMake:
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(breadcrumb_example)
+
+find_package(cake REQUIRED)
+cake_auto_package(INSTALL_TO_SHARE urdf rviz web_templates)
 ```
 
-### Analyzing Multiple Launch Files
+The `cake_auto_package()` macro automatically:
+- Discovers all nodes in `nodes/`
+- Generates C++ and Python interface code from `interface.yaml` files
+- Builds libraries and executables
+- Registers composable components
+- Installs everything to the correct locations
+- Exports interface definitions for breadcrumb
 
-Breadcrumb can analyze multiple launch files together:
+### Node Structure with cake
 
-```bash
-breadcrumb launch/sensors.launch.py launch/processing.launch.py -o combined.json
+Each node directory contains:
+- `interface.yaml` - Declarative interface definition (topics, services, actions, parameters)
+- `node_name.cpp` or `node_name.py` - Implementation with `init(context)` function
+- Generated code provides `Context` struct with strongly-typed publishers, subscribers, etc.
+
+Example from cartpole_controller:
+```cpp
+void init(Context& ctx) {
+    // ctx.sub.joint_states - subscriber callback setter
+    // ctx.pub.force - publisher (ready to use)
+    // ctx.params.k1 - type-safe parameter access
+    // ctx.action_servers.track_position - action server
+}
 ```
 
-## Expected Graph Structure
+No boilerplate! Just focus on your node's logic.
 
-### Full System (full_system.launch.py)
+### Launch Files with clingwrap
 
-The complete system creates a multi-robot setup:
+The launch files use clingwrap's clean API:
 
-**robot1 namespace:**
-- sensor_driver → sensor_data → data_processor
-- data_processor → processed_data → monitor_node
-- data_processor → alerts → monitor_node
-- monitor_node → get_statistics (service client) → data_processor
-- controller → cmd_vel
+```python
+from clingwrap import LaunchBuilder
 
-**robot2 namespace:**
-- Same structure as robot1, completely isolated
+def generate_launch_description():
+    l = LaunchBuilder()
 
-**Diagnostics namespace:**
-- Topic relays from each robot's sensor_status
+    with l.namespace("hardware"):
+        l.node("breadcrumb_example", "cartpole_simulator")
 
-**Composable Nodes:**
-- data_processor runs in a container (processing_container)
-
-**Topic Tools:**
-- Relays: `/sensor_status` → `/diagnostics/sensor_status`
-- Throttles: `/sensor_data/throttled/hz_1_0` (1 Hz throttled version)
-
-## Key Features Demonstrated
-
-### Cake Features
-- ✅ C++ nodes with automatic interface generation
-- ✅ Python nodes with automatic interface generation
-- ✅ Composable nodes with component registration
-- ✅ Parameters with validation
-- ✅ Publishers, subscribers, services, actions
-- ✅ Context-based architecture
-- ✅ Automatic interface.yaml installation
-
-### Clingwrap Features
-- ✅ Clean launch file syntax
-- ✅ Namespace context managers
-- ✅ Composable node containers
-- ✅ Topic relay and throttle
-- ✅ Launch file inclusion with arguments
-- ✅ Static analysis capability
-
-### Breadcrumb Features
-- ✅ Launch file parsing and node extraction
-- ✅ Interface discovery from installed YAML files
-- ✅ Multi-namespace system analysis
-- ✅ External node interface definitions
-- ✅ JSON export for programmatic analysis
-- ✅ GraphViz visualization (full system and grouped)
-- ✅ Launch file inclusion tracking
-
-## Troubleshooting
-
-### "Could not find node interface YAML"
-
-Make sure you've built the package:
-```bash
-colcon build --packages-select breadcrumb_example
-source install/setup.bash
+    return l.get()
 ```
 
-Verify interfaces are installed:
-```bash
-ls $(ros2 pkg prefix breadcrumb_example)/share/breadcrumb_example/interfaces/
+Key features demonstrated:
+- Namespace context managers: `with l.namespace("hardware"):`
+- Topic remapping: `remap={"force": "/hardware/request/force"}`
+- Parameter passing: `parameters={"k1": -3.16, "k2": -5.64, ...}`
+- Modular composition: `l.include_launch_py()` to combine subsystems
+
+### breadcrumb Integration
+
+When you build with cake, `interface.yaml` files are automatically installed to:
+```
+install/breadcrumb_example/share/breadcrumb_example/interfaces/
 ```
 
-### Breadcrumb shows fewer nodes than expected
+breadcrumb finds these files and uses them to build the complete system graph without running any nodes. This enables documentation, visualization, and architectural analysis of your ROS2 system.
 
-Check that your launch file uses clingwrap's `LaunchBuilder`. Standard ROS2 launch files cannot be statically analyzed.
+## Key Demonstrations
 
-### Graph visualization is cluttered
+This example showcases:
 
-Use grouped mode to see namespace-separated views:
-```bash
-breadcrumb launch/full_system.launch.py -o graph.dot --graph-type grouped_by_namespace
-```
+### cake Features
+- ✓ Automatic code generation from `interface.yaml`
+- ✓ Mixed C++ and Python nodes in one package
+- ✓ Composable component registration (C++ nodes)
+- ✓ Type-safe parameter handling with validation
+- ✓ Context-based design pattern (separation of state and ROS communication)
+- ✓ Minimal CMake (5 lines for entire package)
+- ✓ Interface export for breadcrumb analysis
 
-## Learning Resources
+### clingwrap Features
+- ✓ Clean, readable launch file syntax
+- ✓ Namespace context managers for organization
+- ✓ Modular launch file composition (hardware/control/ui subsystems)
+- ✓ Topic and action remapping across namespaces
+- ✓ Parameter passing to nodes
+- ✓ Static analysis API for breadcrumb
 
-- **Cake**: See generated files in `build/breadcrumb_example/` after building
-- **Clingwrap**: Run `python3 -c "import clingwrap; help(clingwrap.LaunchBuilder)"`
-- **Breadcrumb**: Run `breadcrumb --help`
+### breadcrumb Features
+- ✓ Static graph extraction from launch files
+- ✓ Multiple visualization modes (full system, grouped by namespace)
+- ✓ Complete interface analysis (topics, services, actions)
+- ✓ Remapping resolution
+- ✓ Cross-namespace communication visualization
+
+### Integration Benefits
+- ✓ Write interface once (YAML), use everywhere (C++, Python, graphs)
+- ✓ Launch files that are easy to read and maintain
+- ✓ System architecture documentation without running code
+
+## Customization Ideas
+
+Want to experiment? Try:
+
+1. **Modify Physics Parameters**
+   - Edit `nodes/cartpole_simulator/init.cpp`
+   - Change cart mass, pole mass, pole length, gravity
+   - See how it affects control difficulty
+
+2. **Tune Controller Gains**
+   - Use the web UI to adjust k1, k2, k3, k4 in real-time
+   - Or edit `scripts/compute_lqr_gains.py` and recompute optimal gains
+   - Update launch files with new defaults
+
+3. **Add New Sensors**
+   - Create a new node in `nodes/` with its own `interface.yaml`
+   - Publish additional sensor data
+   - Rebuild and watch breadcrumb automatically include it in graphs
+
+4. **Extend the Web UI**
+   - Add new controls or visualizations to `web_templates/dashboard.html`
+   - Implement new ROS2 service calls in `nodes/cartpole_ui/init.py`
+   - Create plots of state history
+
+5. **Implement a Different Controller**
+   - Try PID control instead of LQR
+   - Add a feedforward term
+   - Experiment with model predictive control (MPC)
+
+## Learn More
+
+- [cake README](https://github.com/greenforge-labs/cake/blob/main/README.md) - Declarative code generation
+- [clingwrap README](https://github.com/greenforge-labs/clingwrap/blob/main/README.md) - Launch file wrapper
+- [breadcrumb README](../README.md) - Static graph analysis
 
 ## License
 
-Apache 2.0
+Licensed under the Apache License, Version 2.0. See LICENSE for details.
