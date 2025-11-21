@@ -153,18 +153,6 @@ Each node directory contains:
 - `node_name.cpp` or `node_name.py` - Implementation with `init(context)` function
 - Generated code provides `Context` struct with strongly-typed publishers, subscribers, etc.
 
-Example from cartpole_controller:
-```cpp
-void init(Context& ctx) {
-    // ctx.sub.joint_states - subscriber callback setter
-    // ctx.pub.force - publisher (ready to use)
-    // ctx.params.k1 - type-safe parameter access
-    // ctx.action_servers.track_position - action server
-}
-```
-
-No boilerplate! Just focus on your node's logic.
-
 ### Launch Files with clingwrap
 
 The launch files use clingwrap's clean API:
