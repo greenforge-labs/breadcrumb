@@ -219,7 +219,7 @@ def _topic_pub_edge(pub_id: str, topic_id: str, compatible: bool = True) -> str:
     if compatible:
         return f'"{pub_id}" -> "{topic_id}" [label="pub"];'
     else:
-        return f'"{pub_id}" -> "{topic_id}" [label="pub", color=orange, style=bold];'
+        return f'"{pub_id}" -> "{topic_id}" [label="pub INCOMPATIBLE_QOS", color=orange, style=bold];'
 
 
 def _topic_sub_edge(topic_id: str, sub_id: str, compatible: bool = True) -> str:
@@ -227,7 +227,7 @@ def _topic_sub_edge(topic_id: str, sub_id: str, compatible: bool = True) -> str:
     if compatible:
         return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back];'
     else:
-        return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back, color=orange, style=bold];'
+        return f'"{topic_id}" -> "{sub_id}" [label="sub INCOMPATIBLE_QOS", dir=back, color=orange, style=bold];'
 
 
 def _service_provide_edge(prov_id: str, svc_id: str) -> str:

@@ -132,6 +132,29 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
     # Build the denormalized graph
     graph = build_graph(all_nodes, include_hidden=include_hidden)
 
+    # Collect QoS compatibility warnings
+    qos_warnings = []
+    for topic in graph.topics:
+        for pub_conn in topic.publishers:
+            if not pub_conn.compatible:
+                for warning in pub_conn.warnings:
+                    qos_warnings.append((topic.name, pub_conn.node.fqn, "pub", warning))
+        for sub_conn in topic.subscribers:
+            if not sub_conn.compatible:
+                for warning in sub_conn.warnings:
+                    qos_warnings.append((topic.name, sub_conn.node.fqn, "sub", warning))
+
+    # Display QoS warnings if any
+    if qos_warnings:
+        click.echo()
+        click.echo("=" * 80)
+        click.secho("QoS Compatibility Warnings:", fg="yellow", bold=True)
+        click.echo("-" * 40)
+        for topic_name, node_fqn, role, warning in qos_warnings:
+            click.secho(f"  {topic_name}", fg="yellow")
+            click.echo(f"    {warning}")
+        click.echo()
+
     # Display the graph
     click.echo("=" * 80)
     click.echo(f"Graph Analysis Complete")
@@ -140,6 +163,7 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
     click.echo(f"Topics: {len(graph.topics)}")
     click.echo(f"Services: {len(graph.services)}")
     click.echo(f"Actions: {len(graph.actions)}")
+    click.echo(f"QoS Warnings: {len(qos_warnings)}")
     click.echo("\n" + "=" * 80)
 
     if output:

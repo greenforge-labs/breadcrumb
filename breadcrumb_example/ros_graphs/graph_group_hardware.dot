@@ -28,7 +28,7 @@ digraph ROS2Group_hardware {
   "/hardware/robot_state_publisher" -> "/hardware/robot_description" [label="pub"];
 
   // External Topic Edges
-  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="pub", color=orange, style=bold];
+  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="pub INCOMPATIBLE_QOS", color=orange, style=bold];
   "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="sub", dir=back];
   "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="sub", dir=back];
 
