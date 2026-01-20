@@ -6,13 +6,17 @@ subscribers:
   - topic: requested_force
     type: std_msgs/msg/Float64
     qos:
-      profile: SystemDefaultsQoS
+      history: 10
+      reliability: RELIABLE
+      durability: VOLATILE
 
 publishers:
   - topic: joint_states
     type: sensor_msgs/msg/JointState
     qos:
-      profile: SystemDefaultsQoS
+      history: 1
+      reliability: BEST_EFFORT  # Fast sensor data, may drop messages
+      durability: VOLATILE
 
 services:
   - name: reset

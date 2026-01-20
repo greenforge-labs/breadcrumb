@@ -149,8 +149,8 @@
 <!-- /hardware/cartpole_simulator&#45;&gt;/hardware/joint_states -->
 <g id="edge1" class="edge">
 <title>/hardware/cartpole_simulator&#45;&gt;/hardware/joint_states</title>
-<path fill="none" stroke="black" d="M243.11,-137C316.09,-137 412.55,-137 494.92,-137"/>
-<polygon fill="black" stroke="black" points="495.15,-140.5 505.15,-137 495.15,-133.5 495.15,-140.5"/>
+<path fill="none" stroke="orange" stroke-width="2" d="M243.11,-137C316.09,-137 412.55,-137 494.92,-137"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="495.15,-140.5 505.15,-137 495.15,-133.5 495.15,-140.5"/>
 <text text-anchor="middle" x="288.5" y="-140.8" font-family="Times,serif" font-size="14.00">pub</text>
 </g>
 <!-- /hardware/reset -->
@@ -170,8 +170,8 @@
 <!-- /hardware/joint_states&#45;&gt;/cartpole_ui -->
 <g id="edge2" class="edge">
 <title>/hardware/joint_states&#45;&gt;/cartpole_ui</title>
-<path fill="none" stroke="black" d="M806.05,-154.94C868.56,-164.91 942.93,-179.33 1008.26,-199 1058.01,-213.98 1112.59,-238.68 1147.91,-255.84"/>
-<polygon fill="black" stroke="black" points="806.55,-151.48 796.13,-153.38 805.46,-158.39 806.55,-151.48"/>
+<path fill="none" stroke="orange" stroke-width="2" d="M806.05,-154.94C868.56,-164.91 942.93,-179.33 1008.26,-199 1058.01,-213.98 1112.59,-238.68 1147.91,-255.84"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="806.55,-151.48 796.13,-153.38 805.46,-158.39 806.55,-151.48"/>
 <text text-anchor="middle" x="1031.26" y="-213.8" font-family="Times,serif" font-size="14.00">sub</text>
 </g>
 <!-- /hardware/joint_states&#45;&gt;/control/cartpole_controller -->

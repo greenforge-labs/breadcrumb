@@ -6,7 +6,16 @@ from pathlib import Path
 from clingwrap.static_info import ComposableNodeInfo, NodeInfo
 
 from .helpers import LaunchFileSource
-from .node_interface import NodeInterface
+from .node_interface import (
+    DurabilityPolicy,
+    LivelinessPolicy,
+    NodeInterface,
+    ParameterDefinition,
+    QoS,
+    ReliabilityPolicy,
+    _extract_param_name,
+    _is_param_reference,
+)
 
 from typing import Any
 
@@ -27,13 +36,23 @@ class Node:
 
 
 @dataclass
+class TopicConnection:
+    """A connection to a topic with QoS and compatibility info."""
+
+    node: Node
+    qos: QoS | None = None
+    compatible: bool = True
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Topic:
     """A ROS2 topic in the graph."""
 
     name: str  # Fully qualified topic name
     msg_type: str  # Message type (e.g., "std_msgs/msg/String")
-    publishers: list[Node] = field(default_factory=list)
-    subscribers: list[Node] = field(default_factory=list)
+    publishers: list[TopicConnection] = field(default_factory=list)
+    subscribers: list[TopicConnection] = field(default_factory=list)
 
 
 @dataclass
@@ -162,6 +181,190 @@ def apply_remappings(name: str, remappings: dict[Any, Any] | None) -> str:
     return name
 
 
+def resolve_qos(
+    raw_qos: QoS | None,
+    node_parameters: dict[str, Any],
+    interface_parameters: dict[str, ParameterDefinition],
+) -> QoS | None:
+    """
+    Resolve parameter references in QoS settings.
+
+    Parameter resolution order:
+    1. Launch file parameters (node_parameters)
+    2. Default values from interface.yaml (interface_parameters)
+
+    Args:
+        raw_qos: QoS object potentially containing ${param:name} references
+        node_parameters: Parameters from the launch file
+        interface_parameters: Parameter definitions from interface.yaml
+
+    Returns:
+        Resolved QoS object or None
+    """
+    if raw_qos is None:
+        return None
+
+    def resolve_value(value: Any) -> Any:
+        """Resolve a single value that may be a parameter reference."""
+        if not _is_param_reference(value):
+            return value
+
+        param_name = _extract_param_name(value)
+        if param_name is None:
+            return value
+
+        # First check launch file parameters
+        if param_name in node_parameters:
+            resolved = node_parameters[param_name]
+            # Convert string to appropriate type if needed
+            if resolved is not None:
+                return resolved
+
+        # Fall back to interface parameter default
+        if param_name in interface_parameters:
+            return interface_parameters[param_name].default_value
+
+        # If not found, return the original reference (unresolved)
+        return value
+
+    # Resolve history
+    history = resolve_value(raw_qos.history)
+    if isinstance(history, str) and history != "ALL" and not _is_param_reference(history):
+        # Try to convert string to int if it's a number
+        try:
+            history = int(history)
+        except (ValueError, TypeError):
+            pass
+
+    # Resolve reliability
+    reliability = resolve_value(raw_qos.reliability)
+    if isinstance(reliability, str) and not _is_param_reference(reliability):
+        try:
+            reliability = ReliabilityPolicy(reliability)
+        except ValueError:
+            pass
+
+    # Resolve durability
+    durability = resolve_value(raw_qos.durability) if raw_qos.durability is not None else None
+    if isinstance(durability, str) and not _is_param_reference(durability):
+        try:
+            durability = DurabilityPolicy(durability)
+        except ValueError:
+            pass
+
+    # Resolve deadline_ms
+    deadline_ms = resolve_value(raw_qos.deadline_ms) if raw_qos.deadline_ms is not None else None
+    if isinstance(deadline_ms, str) and not _is_param_reference(deadline_ms):
+        try:
+            deadline_ms = int(deadline_ms)
+        except (ValueError, TypeError):
+            pass
+
+    # Resolve lifespan_ms
+    lifespan_ms = resolve_value(raw_qos.lifespan_ms) if raw_qos.lifespan_ms is not None else None
+    if isinstance(lifespan_ms, str) and not _is_param_reference(lifespan_ms):
+        try:
+            lifespan_ms = int(lifespan_ms)
+        except (ValueError, TypeError):
+            pass
+
+    # Resolve liveliness
+    liveliness = resolve_value(raw_qos.liveliness) if raw_qos.liveliness is not None else None
+    if isinstance(liveliness, str) and not _is_param_reference(liveliness):
+        try:
+            liveliness = LivelinessPolicy(liveliness)
+        except ValueError:
+            pass
+
+    # Resolve lease_duration_ms
+    lease_duration_ms = resolve_value(raw_qos.lease_duration_ms) if raw_qos.lease_duration_ms is not None else None
+    if isinstance(lease_duration_ms, str) and not _is_param_reference(lease_duration_ms):
+        try:
+            lease_duration_ms = int(lease_duration_ms)
+        except (ValueError, TypeError):
+            pass
+
+    return QoS(
+        history=history,
+        reliability=reliability,
+        durability=durability,
+        deadline_ms=deadline_ms,
+        lifespan_ms=lifespan_ms,
+        liveliness=liveliness,
+        lease_duration_ms=lease_duration_ms,
+    )
+
+
+def check_qos_compatibility(
+    pub_qos: QoS | None,
+    sub_qos: QoS | None,
+) -> tuple[bool, list[str]]:
+    """
+    Check QoS compatibility between a publisher and subscriber.
+
+    Only performs checks when both publisher and subscriber have QoS defined.
+    If either has None QoS, returns compatible with no warnings.
+
+    ROS2 Compatibility Rules:
+    - Reliability: Publisher must be >= Subscriber (RELIABLE >= BEST_EFFORT)
+    - Durability: Publisher must be >= Subscriber (TRANSIENT_LOCAL >= VOLATILE)
+    - Deadline: Subscriber deadline >= Publisher deadline
+    - Liveliness: Publisher must be >= Subscriber (MANUAL_BY_TOPIC >= AUTOMATIC)
+    - Lease duration: Subscriber lease >= Publisher lease
+
+    Args:
+        pub_qos: Publisher QoS settings
+        sub_qos: Subscriber QoS settings
+
+    Returns:
+        Tuple of (compatible: bool, warnings: list[str])
+    """
+    # Skip check if either side has no QoS defined
+    if pub_qos is None or sub_qos is None:
+        return (True, [])
+
+    warnings: list[str] = []
+
+    # Reliability check: RELIABLE > BEST_EFFORT
+    # Incompatible: BEST_EFFORT pub -> RELIABLE sub
+    if isinstance(pub_qos.reliability, ReliabilityPolicy) and isinstance(sub_qos.reliability, ReliabilityPolicy):
+        if pub_qos.reliability == ReliabilityPolicy.BEST_EFFORT and sub_qos.reliability == ReliabilityPolicy.RELIABLE:
+            warnings.append(f"Reliability mismatch: publisher is BEST_EFFORT but subscriber requires RELIABLE")
+
+    # Durability check: TRANSIENT_LOCAL > VOLATILE
+    # Incompatible: VOLATILE pub -> TRANSIENT_LOCAL sub
+    if isinstance(pub_qos.durability, DurabilityPolicy) and isinstance(sub_qos.durability, DurabilityPolicy):
+        if pub_qos.durability == DurabilityPolicy.VOLATILE and sub_qos.durability == DurabilityPolicy.TRANSIENT_LOCAL:
+            warnings.append(f"Durability mismatch: publisher is VOLATILE but subscriber requires TRANSIENT_LOCAL")
+
+    # Deadline check: Subscriber deadline >= Publisher deadline
+    # Incompatible: Sub deadline < Pub deadline
+    if isinstance(pub_qos.deadline_ms, int) and isinstance(sub_qos.deadline_ms, int):
+        if sub_qos.deadline_ms < pub_qos.deadline_ms:
+            warnings.append(
+                f"Deadline mismatch: subscriber deadline ({sub_qos.deadline_ms}ms) "
+                f"< publisher deadline ({pub_qos.deadline_ms}ms)"
+            )
+
+    # Liveliness check: MANUAL_BY_TOPIC > AUTOMATIC
+    # Incompatible: AUTOMATIC pub -> MANUAL_BY_TOPIC sub
+    if isinstance(pub_qos.liveliness, LivelinessPolicy) and isinstance(sub_qos.liveliness, LivelinessPolicy):
+        if pub_qos.liveliness == LivelinessPolicy.AUTOMATIC and sub_qos.liveliness == LivelinessPolicy.MANUAL_BY_TOPIC:
+            warnings.append(f"Liveliness mismatch: publisher is AUTOMATIC but subscriber requires MANUAL_BY_TOPIC")
+
+    # Lease duration check: Subscriber lease >= Publisher lease
+    # Incompatible: Sub lease < Pub lease
+    if isinstance(pub_qos.lease_duration_ms, int) and isinstance(sub_qos.lease_duration_ms, int):
+        if sub_qos.lease_duration_ms < pub_qos.lease_duration_ms:
+            warnings.append(
+                f"Lease duration mismatch: subscriber lease ({sub_qos.lease_duration_ms}ms) "
+                f"< publisher lease ({pub_qos.lease_duration_ms}ms)"
+            )
+
+    compatible = len(warnings) == 0
+    return (compatible, warnings)
+
+
 def _is_hidden(name: str) -> bool:
     """
     Check if a name represents a hidden entity (starts with underscore).
@@ -269,10 +472,16 @@ def build_graph(
             if not include_hidden and _is_hidden(final_topic):
                 continue
 
+            # Resolve QoS parameters
+            resolved_qos = resolve_qos(pub.qos, parameters, interface.parameters)
+
+            # Create TopicConnection
+            pub_conn = TopicConnection(node=node, qos=resolved_qos)
+
             # Create or update Topic object
             if final_topic not in topics_dict:
                 topics_dict[final_topic] = Topic(name=final_topic, msg_type=pub.type)
-            topics_dict[final_topic].publishers.append(node)
+            topics_dict[final_topic].publishers.append(pub_conn)
 
         # Process subscribers
         for sub in interface.subscribers:
@@ -285,10 +494,16 @@ def build_graph(
             if not include_hidden and _is_hidden(final_topic):
                 continue
 
+            # Resolve QoS parameters
+            resolved_qos = resolve_qos(sub.qos, parameters, interface.parameters)
+
+            # Create TopicConnection
+            sub_conn = TopicConnection(node=node, qos=resolved_qos)
+
             # Create or update Topic object
             if final_topic not in topics_dict:
                 topics_dict[final_topic] = Topic(name=final_topic, msg_type=sub.type)
-            topics_dict[final_topic].subscribers.append(node)
+            topics_dict[final_topic].subscribers.append(sub_conn)
 
         # Process services (providers)
         for svc in interface.services:
@@ -358,5 +573,17 @@ def build_graph(
     graph.topics = list(topics_dict.values())
     graph.services = list(services_dict.values())
     graph.actions = list(actions_dict.values())
+
+    # Check QoS compatibility for all pub/sub pairs on each topic
+    for topic in graph.topics:
+        for pub_conn in topic.publishers:
+            for sub_conn in topic.subscribers:
+                compatible, warnings = check_qos_compatibility(pub_conn.qos, sub_conn.qos)
+                if not compatible:
+                    # Mark both sides as having compatibility issues
+                    pub_conn.compatible = False
+                    pub_conn.warnings.extend([f"→ {sub_conn.node.fqn}: {w}" for w in warnings])
+                    sub_conn.compatible = False
+                    sub_conn.warnings.extend([f"← {pub_conn.node.fqn}: {w}" for w in warnings])
 
     return graph

@@ -113,8 +113,8 @@
 <!-- hardware&#45;&gt;/hardware/joint_states -->
 <g id="edge1" class="edge">
 <title>hardware&#45;&gt;/hardware/joint_states</title>
-<path fill="none" stroke="black" d="M101.08,-104.74C107.03,-103.2 113.13,-101.87 119,-101 143.18,-97.42 149.59,-99.75 174,-101 244.09,-104.59 321.77,-112.21 386.11,-119.51"/>
-<polygon fill="black" stroke="black" points="385.99,-123.02 396.32,-120.68 386.79,-116.07 385.99,-123.02"/>
+<path fill="none" stroke="orange" stroke-width="2" d="M101.08,-104.74C107.03,-103.2 113.13,-101.87 119,-101 143.18,-97.42 149.59,-99.75 174,-101 244.09,-104.59 321.77,-112.21 386.11,-119.51"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="385.99,-123.02 396.32,-120.68 386.79,-116.07 385.99,-123.02"/>
 <text text-anchor="middle" x="146.5" y="-104.8" font-family="Times,serif" font-size="14.00">pub</text>
 </g>
 <!-- /hardware/reset -->
@@ -148,8 +148,8 @@
 <!-- /hardware/joint_states&#45;&gt;/cartpole_ui -->
 <g id="edge2" class="edge">
 <title>/hardware/joint_states&#45;&gt;/cartpole_ui</title>
-<path fill="none" stroke="black" d="M648.22,-157.95C732.79,-172.47 843.48,-191.46 920,-204.59"/>
-<polygon fill="black" stroke="black" points="648.75,-154.49 638.3,-156.25 647.56,-161.39 648.75,-154.49"/>
+<path fill="none" stroke="orange" stroke-width="2" d="M648.22,-157.95C732.79,-172.47 843.48,-191.46 920,-204.59"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="648.75,-154.49 638.3,-156.25 647.56,-161.39 648.75,-154.49"/>
 <text text-anchor="middle" x="889.26" y="-202.8" font-family="Times,serif" font-size="14.00">sub</text>
 </g>
 <!-- /hardware/reset&#45;&gt;/cartpole_ui -->

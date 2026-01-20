@@ -2,10 +2,60 @@
 
 from pathlib import Path
 
-from .graph import Action, Graph, Node, Service, Topic
+from .graph import Action, Graph, Node, Service, Topic, TopicConnection
 from .helpers import extract_group_name, group_nodes_by_namespace
+from .node_interface import DurabilityPolicy, LivelinessPolicy, QoS, ReliabilityPolicy
 
 from typing import Any
+
+
+def serialize_qos(qos: QoS | None) -> dict[str, Any] | None:
+    """
+    Serialize a QoS object to a JSON-serializable dictionary.
+
+    Args:
+        qos: QoS object to serialize, or None
+
+    Returns:
+        Dictionary representation of the QoS, or None
+    """
+    if qos is None:
+        return None
+
+    result: dict[str, Any] = {}
+
+    # History
+    result["history"] = qos.history
+
+    # Reliability
+    if isinstance(qos.reliability, ReliabilityPolicy):
+        result["reliability"] = qos.reliability.value
+    else:
+        result["reliability"] = qos.reliability
+
+    # Optional fields - only include if set
+    if qos.durability is not None:
+        if isinstance(qos.durability, DurabilityPolicy):
+            result["durability"] = qos.durability.value
+        else:
+            result["durability"] = qos.durability
+
+    if qos.deadline_ms is not None:
+        result["deadline_ms"] = qos.deadline_ms
+
+    if qos.lifespan_ms is not None:
+        result["lifespan_ms"] = qos.lifespan_ms
+
+    if qos.liveliness is not None:
+        if isinstance(qos.liveliness, LivelinessPolicy):
+            result["liveliness"] = qos.liveliness.value
+        else:
+            result["liveliness"] = qos.liveliness
+
+    if qos.lease_duration_ms is not None:
+        result["lease_duration_ms"] = qos.lease_duration_ms
+
+    return result
 
 
 def serialize_node(node: Node) -> dict[str, Any]:
@@ -31,6 +81,24 @@ def serialize_node(node: Node) -> dict[str, Any]:
     }
 
 
+def serialize_topic_connection(conn: TopicConnection) -> dict[str, Any]:
+    """
+    Serialize a TopicConnection object to a JSON-serializable dictionary.
+
+    Args:
+        conn: TopicConnection object to serialize
+
+    Returns:
+        Dictionary with node FQN, QoS, and compatibility info
+    """
+    return {
+        "node": conn.node.fqn,
+        "qos": serialize_qos(conn.qos),
+        "compatible": conn.compatible,
+        "warnings": conn.warnings,
+    }
+
+
 def serialize_topic(topic: Topic) -> dict[str, Any]:
     """
     Serialize a Topic object to a JSON-serializable dictionary.
@@ -39,13 +107,13 @@ def serialize_topic(topic: Topic) -> dict[str, Any]:
         topic: Topic object to serialize
 
     Returns:
-        Dictionary with node references as FQN strings
+        Dictionary with node references including QoS and compatibility info
     """
     return {
         "name": topic.name,
         "msg_type": topic.msg_type,
-        "publishers": [node.fqn for node in topic.publishers],
-        "subscribers": [node.fqn for node in topic.subscribers],
+        "publishers": [serialize_topic_connection(conn) for conn in topic.publishers],
+        "subscribers": [serialize_topic_connection(conn) for conn in topic.subscribers],
     }
 
 
@@ -146,14 +214,20 @@ def _ros_node_attrs(node_id: str, label: str, fillcolor: str = "lightblue") -> s
     return f'"{node_id}" [label="{escaped_label}", style=filled, fillcolor={fillcolor}];'
 
 
-def _topic_pub_edge(pub_id: str, topic_id: str) -> str:
+def _topic_pub_edge(pub_id: str, topic_id: str, compatible: bool = True) -> str:
     """Generate DOT edge for publisher to topic."""
-    return f'"{pub_id}" -> "{topic_id}" [label="pub"];'
+    if compatible:
+        return f'"{pub_id}" -> "{topic_id}" [label="pub"];'
+    else:
+        return f'"{pub_id}" -> "{topic_id}" [label="pub", color=orange, style=bold];'
 
 
-def _topic_sub_edge(topic_id: str, sub_id: str) -> str:
+def _topic_sub_edge(topic_id: str, sub_id: str, compatible: bool = True) -> str:
     """Generate DOT edge for topic to subscriber."""
-    return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back];'
+    if compatible:
+        return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back];'
+    else:
+        return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back, color=orange, style=bold];'
 
 
 def _service_provide_edge(prov_id: str, svc_id: str) -> str:
@@ -201,7 +275,7 @@ def _categorize_entities_by_node(
 
     for topic in graph.topics:
         if len(topic.publishers) == 1:
-            node_fqn = topic.publishers[0].fqn
+            node_fqn = topic.publishers[0].node.fqn
             if node_fqn not in owned_topics:
                 owned_topics[node_fqn] = []
             owned_topics[node_fqn].append(topic)
@@ -334,12 +408,12 @@ def serialize_to_dot(graph: Graph) -> str:
     lines.append("  // Topic Edges")
     for topic in graph.topics:
         topic_id = _escape_dot_label(topic.name)
-        for pub in topic.publishers:
-            pub_id = _escape_dot_label(pub.fqn)
-            lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
-        for sub in topic.subscribers:
-            sub_id = _escape_dot_label(sub.fqn)
-            lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
+        for pub_conn in topic.publishers:
+            pub_id = _escape_dot_label(pub_conn.node.fqn)
+            lines.append(f"  {_topic_pub_edge(pub_id, topic_id, pub_conn.compatible)}")
+        for sub_conn in topic.subscribers:
+            sub_id = _escape_dot_label(sub_conn.node.fqn)
+            lines.append(f"  {_topic_sub_edge(topic_id, sub_id, sub_conn.compatible)}")
     lines.append("")
 
     lines.append("  // Service Edges")
@@ -393,8 +467,8 @@ def _get_inter_group_communication(
     inter_group_topics = []
     for topic in graph.topics:
         # Get groups involved in this topic
-        pub_groups = {node_to_group.get(pub.fqn) for pub in topic.publishers}
-        sub_groups = {node_to_group.get(sub.fqn) for sub in topic.subscribers}
+        pub_groups = {node_to_group.get(pub_conn.node.fqn) for pub_conn in topic.publishers}
+        sub_groups = {node_to_group.get(sub_conn.node.fqn) for sub_conn in topic.subscribers}
         all_groups = pub_groups | sub_groups
 
         # Inter-group if:
@@ -469,7 +543,7 @@ def _categorize_entities_by_group(
 
     for topic in inter_topics:
         # Get unique groups that publish this topic (excluding root namespace)
-        pub_groups = {extract_group_name(pub.namespace) for pub in topic.publishers}
+        pub_groups = {extract_group_name(pub_conn.node.namespace) for pub_conn in topic.publishers}
         pub_groups_non_root = {g for g in pub_groups if g is not None}
 
         if len(pub_groups_non_root) == 1:
@@ -640,27 +714,27 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
         topic_id = _escape_dot_label(topic.name)
 
         # Connect group nodes and root nodes to topic
-        for pub in topic.publishers:
-            pub_group = extract_group_name(pub.namespace)
+        for pub_conn in topic.publishers:
+            pub_group = extract_group_name(pub_conn.node.namespace)
             if pub_group is not None:
                 # Publisher is in a named group
                 group_id = _escape_dot_label(pub_group)
-                lines.append(f"  {_topic_pub_edge(group_id, topic_id)}")
+                lines.append(f"  {_topic_pub_edge(group_id, topic_id, pub_conn.compatible)}")
             else:
                 # Publisher is a root namespace node
-                node_id = _escape_dot_label(pub.fqn)
-                lines.append(f"  {_topic_pub_edge(node_id, topic_id)}")
+                node_id = _escape_dot_label(pub_conn.node.fqn)
+                lines.append(f"  {_topic_pub_edge(node_id, topic_id, pub_conn.compatible)}")
 
-        for sub in topic.subscribers:
-            sub_group = extract_group_name(sub.namespace)
+        for sub_conn in topic.subscribers:
+            sub_group = extract_group_name(sub_conn.node.namespace)
             if sub_group is not None:
                 # Subscriber is in a named group
                 group_id = _escape_dot_label(sub_group)
-                lines.append(f"  {_topic_sub_edge(topic_id, group_id)}")
+                lines.append(f"  {_topic_sub_edge(topic_id, group_id, sub_conn.compatible)}")
             else:
                 # Subscriber is a root namespace node
-                node_id = _escape_dot_label(sub.fqn)
-                lines.append(f"  {_topic_sub_edge(topic_id, node_id)}")
+                node_id = _escape_dot_label(sub_conn.node.fqn)
+                lines.append(f"  {_topic_sub_edge(topic_id, node_id, sub_conn.compatible)}")
     lines.append("")
 
     lines.append("  // Service Edges")
@@ -740,13 +814,13 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
     internal_topics = []
     external_topics = []
     for topic in graph.topics:
-        pubs_in_group = [p for p in topic.publishers if p.fqn in node_fqns]
-        subs_in_group = [s for s in topic.subscribers if s.fqn in node_fqns]
+        pubs_in_group = [p for p in topic.publishers if p.node.fqn in node_fqns]
+        subs_in_group = [s for s in topic.subscribers if s.node.fqn in node_fqns]
 
         if pubs_in_group or subs_in_group:
             # Check if all publishers and subscribers are in this group
-            all_pubs_internal = all(p.fqn in node_fqns for p in topic.publishers)
-            all_subs_internal = all(s.fqn in node_fqns for s in topic.subscribers)
+            all_pubs_internal = all(p.node.fqn in node_fqns for p in topic.publishers)
+            all_subs_internal = all(s.node.fqn in node_fqns for s in topic.subscribers)
 
             if all_pubs_internal and all_subs_internal:
                 internal_topics.append(topic)
@@ -869,12 +943,12 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         lines.append("  // Internal Topic Edges")
         for topic in internal_topics:
             topic_id = _escape_dot_label(topic.name)
-            for pub in topic.publishers:
-                pub_id = _escape_dot_label(pub.fqn)
-                lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
-            for sub in topic.subscribers:
-                sub_id = _escape_dot_label(sub.fqn)
-                lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
+            for pub_conn in topic.publishers:
+                pub_id = _escape_dot_label(pub_conn.node.fqn)
+                lines.append(f"  {_topic_pub_edge(pub_id, topic_id, pub_conn.compatible)}")
+            for sub_conn in topic.subscribers:
+                sub_id = _escape_dot_label(sub_conn.node.fqn)
+                lines.append(f"  {_topic_sub_edge(topic_id, sub_id, sub_conn.compatible)}")
         lines.append("")
 
     # Add edges for external topics (only for nodes in this group)
@@ -882,14 +956,14 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         lines.append("  // External Topic Edges")
         for topic in external_topics:
             topic_id = _escape_dot_label(topic.name)
-            for pub in topic.publishers:
-                if pub.fqn in node_fqns:
-                    pub_id = _escape_dot_label(pub.fqn)
-                    lines.append(f"  {_topic_pub_edge(pub_id, topic_id)}")
-            for sub in topic.subscribers:
-                if sub.fqn in node_fqns:
-                    sub_id = _escape_dot_label(sub.fqn)
-                    lines.append(f"  {_topic_sub_edge(topic_id, sub_id)}")
+            for pub_conn in topic.publishers:
+                if pub_conn.node.fqn in node_fqns:
+                    pub_id = _escape_dot_label(pub_conn.node.fqn)
+                    lines.append(f"  {_topic_pub_edge(pub_id, topic_id, pub_conn.compatible)}")
+            for sub_conn in topic.subscribers:
+                if sub_conn.node.fqn in node_fqns:
+                    sub_id = _escape_dot_label(sub_conn.node.fqn)
+                    lines.append(f"  {_topic_sub_edge(topic_id, sub_id, sub_conn.compatible)}")
         lines.append("")
 
     # Add edges for internal services

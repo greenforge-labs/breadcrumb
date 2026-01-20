@@ -14,6 +14,7 @@ A ROS2 graph static analysis tool that works with cake and clingwrap.
 - **Static Analysis**: Understand your system architecture without launching nodes
 - **Complete Visualization**: See all publishers, subscribers, services, and actions in one view
 - **Multiple Perspectives**: Generate full-system, namespace-grouped, or inter-group communication graphs
+- **QoS Compatibility Checking**: Detect QoS mismatches between publishers and subscribers before runtime
 - **Export Options**: Output to JSON for programmatic analysis or DOT for GraphViz visualization
 
 ### Prerequisites
@@ -144,6 +145,10 @@ done
 - `call`: Service/action client (dashed line)
 - `serve`: Action server (dotted line)
 
+**Edge Colors**:
+- Black: Compatible QoS or no QoS defined
+- Orange (bold): QoS incompatibility detected between publisher and subscriber
+
 ## JSON Export
 
 Export graph data as JSON for programmatic analysis or custom visualizations:
@@ -172,14 +177,119 @@ breadcrumb my_robot.launch.py -o graph.json
     {
       "name": "/robot1/sensors/scan",
       "msg_type": "sensor_msgs/msg/LaserScan",
-      "publishers": ["/robot1/sensors/lidar"],
-      "subscribers": ["/robot1/navigation/planner"]
+      "publishers": [
+        {
+          "node": "/robot1/sensors/lidar",
+          "qos": {
+            "history": 10,
+            "reliability": "RELIABLE",
+            "durability": "VOLATILE"
+          },
+          "compatible": true,
+          "warnings": []
+        }
+      ],
+      "subscribers": [
+        {
+          "node": "/robot1/navigation/planner",
+          "qos": {
+            "history": 10,
+            "reliability": "RELIABLE",
+            "durability": "VOLATILE"
+          },
+          "compatible": true,
+          "warnings": []
+        }
+      ]
     }
   ],
   "services": [...],
   "actions": [...]
 }
 ```
+
+## QoS Support
+
+Breadcrumb supports parsing and validating QoS (Quality of Service) settings for publishers and subscribers, helping you detect incompatibilities before runtime.
+
+### QoS in Interface Files
+
+Define QoS settings in your `interface.yaml` files:
+
+```yaml
+publishers:
+  - topic: sensor_data
+    type: sensor_msgs/msg/LaserScan
+    qos:
+      history: 10              # Required: integer >= 1 or "ALL"
+      reliability: RELIABLE    # Required: RELIABLE or BEST_EFFORT
+      durability: VOLATILE     # Optional: TRANSIENT_LOCAL or VOLATILE
+      deadline_ms: 100         # Optional: integer >= 0
+      lifespan_ms: 1000        # Optional: integer >= 0
+      liveliness: AUTOMATIC    # Optional: AUTOMATIC or MANUAL_BY_TOPIC
+      lease_duration_ms: 500   # Optional: integer >= 0
+
+subscribers:
+  - topic: commands
+    type: std_msgs/msg/String
+    qos:
+      history: 5
+      reliability: BEST_EFFORT
+```
+
+### Parameter Substitution
+
+QoS fields can reference node parameters using `${param:name}` syntax:
+
+```yaml
+parameters:
+  qos_depth:
+    type: int
+    default_value: 10
+    description: QoS history depth
+
+publishers:
+  - topic: output
+    type: std_msgs/msg/String
+    qos:
+      history: ${param:qos_depth}
+      reliability: RELIABLE
+```
+
+Parameters are resolved in order:
+1. **Launch file parameters**: Values passed via the launch file
+2. **Default values**: Fallback to `default_value` from the `parameters:` section
+
+### QoS Compatibility Checking
+
+Breadcrumb automatically checks QoS compatibility between publishers and subscribers on the same topic. Incompatible connections are flagged with warnings.
+
+**ROS2 Compatibility Rules**:
+
+| Field | Rule | Incompatible Example |
+|-------|------|---------------------|
+| Reliability | Publisher must be >= Subscriber | BEST_EFFORT pub -> RELIABLE sub |
+| Durability | Publisher must be >= Subscriber | VOLATILE pub -> TRANSIENT_LOCAL sub |
+| Deadline | Subscriber deadline >= Publisher deadline | Sub 100ms, Pub 200ms |
+| Liveliness | Publisher must be >= Subscriber | AUTOMATIC pub -> MANUAL_BY_TOPIC sub |
+| Lease duration | Subscriber lease >= Publisher lease | Sub 100ms, Pub 200ms |
+
+**Note**: Compatibility is only checked when **both** publisher and subscriber have QoS defined. If either side has no QoS (`qos: null` or omitted), the check is skipped.
+
+### Viewing QoS Warnings
+
+**In JSON output**: Each publisher/subscriber includes `compatible` (boolean) and `warnings` (list of strings):
+
+```json
+{
+  "node": "/my_node",
+  "qos": {"history": 10, "reliability": "BEST_EFFORT"},
+  "compatible": false,
+  "warnings": ["-> /other_node: Reliability mismatch: publisher is BEST_EFFORT but subscriber requires RELIABLE"]
+}
+```
+
+**In DOT output**: Incompatible connections are shown with orange, bold edges.
 
 ## Packages Not Using Cake
 
@@ -198,10 +308,16 @@ node:
 publishers:
   - topic: output
     type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 
 subscribers:
   - topic: input
     type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 ```
 
 For composable nodes, include the `plugin` field:
@@ -216,6 +332,10 @@ node:
 publishers:
   - topic: data
     type: sensor_msgs/msg/PointCloud2
+    qos:
+      history: 5
+      reliability: BEST_EFFORT
+      durability: VOLATILE
 ```
 
 ### Installing Interface Files with CMake
@@ -252,8 +372,16 @@ node:
 publishers:
   - topic: image_raw
     type: sensor_msgs/msg/Image
+    qos:
+      history: 1
+      reliability: BEST_EFFORT
+      durability: VOLATILE
   - topic: camera_info
     type: sensor_msgs/msg/CameraInfo
+    qos:
+      history: 1
+      reliability: RELIABLE
+      durability: TRANSIENT_LOCAL
 
 services:
   - name: set_camera_settings

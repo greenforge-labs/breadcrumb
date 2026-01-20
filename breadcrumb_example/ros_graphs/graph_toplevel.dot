@@ -28,8 +28,8 @@ digraph ROS2TopLevel {
   "/rviz2" [label="/rviz2\n(rviz2)", style=filled, fillcolor=lightyellow];
 
   // Topic Edges
-  "hardware" -> "/hardware/joint_states" [label="pub"];
-  "/hardware/joint_states" -> "/cartpole_ui" [label="sub", dir=back];
+  "hardware" -> "/hardware/joint_states" [label="pub", color=orange, style=bold];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="sub", dir=back, color=orange, style=bold];
   "/hardware/joint_states" -> "control" [label="sub", dir=back];
   "/hardware/joint_states" -> "hardware" [label="sub", dir=back];
   "control" -> "/hardware/request/force" [label="pub"];
