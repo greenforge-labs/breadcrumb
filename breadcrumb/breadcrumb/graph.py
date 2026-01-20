@@ -302,8 +302,8 @@ def check_qos_compatibility(
     """
     Check QoS compatibility between a publisher and subscriber.
 
-    Only performs checks when both publisher and subscriber have QoS defined.
-    If either has None QoS, returns compatible with no warnings.
+    Reports incompatibility when one side has QoS defined but the other doesn't.
+    If both have None QoS, returns compatible with no warnings.
 
     ROS2 Compatibility Rules:
     - Reliability: Publisher must be >= Subscriber (RELIABLE >= BEST_EFFORT)
@@ -319,8 +319,12 @@ def check_qos_compatibility(
     Returns:
         Tuple of (compatible: bool, warnings: list[str])
     """
-    # Skip check if either side has no QoS defined
-    if pub_qos is None or sub_qos is None:
+    # Check for one-sided QoS definition
+    if pub_qos is None and sub_qos is not None:
+        return (False, ["QoS mismatch: subscriber specifies QoS but publisher does not"])
+    if pub_qos is not None and sub_qos is None:
+        return (False, ["QoS mismatch: publisher specifies QoS but subscriber does not"])
+    if pub_qos is None and sub_qos is None:
         return (True, [])
 
     warnings: list[str] = []
