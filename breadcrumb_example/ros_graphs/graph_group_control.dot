@@ -28,9 +28,9 @@ digraph ROS2Group_control {
   "/control/cartpole_controller" -> "/hardware/request/force" [label="pub"];
 
   // External Service Edges
-  "/control/cartpole_controller" -> "/control/enable" [label="provide", style=dashed];
+  "/control/enable" -> "/control/cartpole_controller" [label="provided by", style=dashed];
 
   // External Action Edges
-  "/control/cartpole_controller" -> "/control/track_position" [label="serve", style=dotted];
+  "/control/track_position" -> "/control/cartpole_controller" [label="served by", style=dotted];
 
 }

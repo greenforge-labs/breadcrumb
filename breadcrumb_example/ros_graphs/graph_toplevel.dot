@@ -36,12 +36,12 @@ digraph ROS2TopLevel {
   "/hardware/request/force" -> "hardware" [label="subbed by"];
 
   // Service Edges
-  "control" -> "/control/enable" [label="provide", style=dashed];
-  "/control/enable" -> "/cartpole_ui" [label="called by", style=dashed];
-  "hardware" -> "/hardware/reset" [label="provide", style=dashed];
-  "/hardware/reset" -> "/cartpole_ui" [label="called by", style=dashed];
+  "/control/enable" -> "control" [label="provided by", style=dashed];
+  "/cartpole_ui" -> "/control/enable" [label="calls", style=dashed];
+  "/hardware/reset" -> "hardware" [label="provided by", style=dashed];
+  "/cartpole_ui" -> "/hardware/reset" [label="calls", style=dashed];
 
   // Action Edges
-  "control" -> "/control/track_position" [label="serve", style=dotted];
-  "/control/track_position" -> "/cartpole_ui" [label="called by", style=dotted];
+  "/control/track_position" -> "control" [label="served by", style=dotted];
+  "/cartpole_ui" -> "/control/track_position" [label="calls", style=dotted];
 }

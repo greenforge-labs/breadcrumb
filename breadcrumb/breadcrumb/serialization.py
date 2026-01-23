@@ -217,37 +217,37 @@ def _ros_node_attrs(node_id: str, label: str, fillcolor: str = "lightblue") -> s
 def _topic_pub_edge(pub_id: str, topic_id: str, compatible: bool = True) -> str:
     """Generate DOT edge for publisher to topic."""
     if compatible:
-        return f'"{pub_id}" -> "{topic_id}" [label="pub"];'
+        return f'"{pub_id}" -> "{topic_id}" [label="publishes"];'
     else:
-        return f'"{pub_id}" -> "{topic_id}" [label="pub INCOMPATIBLE_QOS", color=orange, style=bold];'
+        return f'"{pub_id}" -> "{topic_id}" [label="publishes INCOMPATIBLE_QOS", color=orange, style=bold];'
 
 
 def _topic_sub_edge(topic_id: str, sub_id: str, compatible: bool = True) -> str:
     """Generate DOT edge for topic to subscriber."""
     if compatible:
-        return f'"{topic_id}" -> "{sub_id}" [label="subbed by"];'
+        return f'"{topic_id}" -> "{sub_id}" [label="subscribed by"];'
     else:
-        return f'"{topic_id}" -> "{sub_id}" [label="subbed by INCOMPATIBLE_QOS", color=orange, style=bold];'
-
-
-def _service_provide_edge(prov_id: str, svc_id: str) -> str:
-    """Generate DOT edge for provider to service."""
-    return f'"{prov_id}" -> "{svc_id}" [label="provide", style=dashed];'
+        return f'"{topic_id}" -> "{sub_id}" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];'
 
 
 def _service_call_edge(client_id: str, svc_id: str) -> str:
     """Generate DOT edge for client to service."""
-    return f'"{svc_id}" -> "{client_id}" [label="called by", style=dashed];'
+    return f'"{client_id}" -> "{svc_id}" [label="calls", style=dashed];'
 
 
-def _action_serve_edge(srv_id: str, act_id: str) -> str:
-    """Generate DOT edge for server to action."""
-    return f'"{srv_id}" -> "{act_id}" [label="serve", style=dotted];'
+def _service_provide_edge(prov_id: str, svc_id: str) -> str:
+    """Generate DOT edge for service to provider."""
+    return f'"{svc_id}" -> "{prov_id}" [label="provided by", style=dashed];'
 
 
 def _action_call_edge(client_id: str, act_id: str) -> str:
     """Generate DOT edge for client to action."""
-    return f'"{act_id}" -> "{client_id}" [label="called by", style=dotted];'
+    return f'"{client_id}" -> "{act_id}" [label="calls", style=dotted];'
+
+
+def _action_serve_edge(srv_id: str, act_id: str) -> str:
+    """Generate DOT edge for action to server."""
+    return f'"{act_id}" -> "{srv_id}" [label="served by", style=dotted];'
 
 
 def _categorize_entities_by_node(

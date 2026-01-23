@@ -33,6 +33,6 @@ digraph ROS2Group_hardware {
   "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="subbed by"];
 
   // External Service Edges
-  "/hardware/cartpole_simulator" -> "/hardware/reset" [label="provide", style=dashed];
+  "/hardware/reset" -> "/hardware/cartpole_simulator" [label="provided by", style=dashed];
 
 }
