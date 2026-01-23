@@ -74,8 +74,8 @@
 <!-- /hardware/joint_states&#45;&gt;/control/cartpole_controller -->
 <g id="edge1" class="edge">
 <title>/hardware/joint_states&#45;&gt;/control/cartpole_controller</title>
-<path fill="none" stroke="black" d="M334.49,-118.03C351.88,-118.03 369.15,-118.03 385.52,-118.03"/>
-<polygon fill="black" stroke="black" points="334.24,-114.53 324.24,-118.03 334.24,-121.53 334.24,-114.53"/>
+<path fill="none" stroke="black" d="M324.24,-118.03C341.49,-118.03 358.77,-118.03 375.32,-118.03"/>
+<polygon fill="black" stroke="black" points="375.52,-121.53 385.52,-118.03 375.52,-114.53 375.52,-121.53"/>
 <text text-anchor="middle" x="354.85" y="-121.83" font-family="Times,serif" font-size="14.00">sub</text>
 </g>
 </g>

@@ -74,9 +74,9 @@
 <!-- /hardware/joint_states&#45;&gt;/hardware/robot_state_publisher -->
 <g id="edge3" class="edge">
 <title>/hardware/joint_states&#45;&gt;/hardware/robot_state_publisher</title>
-<path fill="none" stroke="black" d="M832.61,-140.15C821.47,-143.49 810.56,-147.4 800.29,-152 791.04,-156.14 791.46,-161.68 782.29,-166 744.01,-184.03 643.74,-205.1 564.15,-219.96"/>
-<polygon fill="black" stroke="black" points="833.79,-143.46 842.46,-137.37 831.88,-136.72 833.79,-143.46"/>
-<text text-anchor="middle" x="689.29" y="-215.8" font-family="Times,serif" font-size="14.00">sub</text>
+<path fill="none" stroke="orange" stroke-width="2" d="M842.46,-137.37C827.92,-141.25 813.57,-146.06 800.29,-152 791.04,-156.14 791.46,-161.68 782.29,-166 745.58,-183.29 651.86,-203.37 574.04,-218.1"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="573.33,-214.67 564.15,-219.96 574.62,-221.55 573.33,-214.67"/>
+<text text-anchor="middle" x="689.29" y="-215.8" font-family="Times,serif" font-size="14.00">sub INCOMPATIBLE_QOS</text>
 </g>
 <!-- /hardware/request/force -->
 <g id="node5" class="node">
@@ -88,8 +88,8 @@
 <!-- /hardware/request/force&#45;&gt;/hardware/cartpole_simulator -->
 <g id="edge4" class="edge">
 <title>/hardware/request/force&#45;&gt;/hardware/cartpole_simulator</title>
-<path fill="none" stroke="black" d="M277.89,-183C298.68,-183 319.84,-183 339.91,-183"/>
-<polygon fill="black" stroke="black" points="277.72,-179.5 267.72,-183 277.72,-186.5 277.72,-179.5"/>
+<path fill="none" stroke="black" d="M267.72,-183C288.26,-183 309.39,-183 329.7,-183"/>
+<polygon fill="black" stroke="black" points="329.91,-186.5 339.91,-183 329.91,-179.5 329.91,-186.5"/>
 <text text-anchor="middle" x="298.29" y="-186.8" font-family="Times,serif" font-size="14.00">sub</text>
 </g>
 </g>

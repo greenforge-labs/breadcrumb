@@ -225,9 +225,9 @@ def _topic_pub_edge(pub_id: str, topic_id: str, compatible: bool = True) -> str:
 def _topic_sub_edge(topic_id: str, sub_id: str, compatible: bool = True) -> str:
     """Generate DOT edge for topic to subscriber."""
     if compatible:
-        return f'"{topic_id}" -> "{sub_id}" [label="sub", dir=back];'
+        return f'"{topic_id}" -> "{sub_id}" [label="sub"];'
     else:
-        return f'"{topic_id}" -> "{sub_id}" [label="sub INCOMPATIBLE_QOS", dir=back, color=orange, style=bold];'
+        return f'"{topic_id}" -> "{sub_id}" [label="sub INCOMPATIBLE_QOS", color=orange, style=bold];'
 
 
 def _service_provide_edge(prov_id: str, svc_id: str) -> str:
@@ -237,7 +237,7 @@ def _service_provide_edge(prov_id: str, svc_id: str) -> str:
 
 def _service_call_edge(client_id: str, svc_id: str) -> str:
     """Generate DOT edge for client to service."""
-    return f'"{svc_id}" -> "{client_id}" [label="call", style=dashed, dir=back];'
+    return f'"{svc_id}" -> "{client_id}" [label="call", style=dashed];'
 
 
 def _action_serve_edge(srv_id: str, act_id: str) -> str:
@@ -247,7 +247,7 @@ def _action_serve_edge(srv_id: str, act_id: str) -> str:
 
 def _action_call_edge(client_id: str, act_id: str) -> str:
     """Generate DOT edge for client to action."""
-    return f'"{act_id}" -> "{client_id}" [label="call", style=dotted, dir=back];'
+    return f'"{act_id}" -> "{client_id}" [label="call", style=dotted];'
 
 
 def _categorize_entities_by_node(

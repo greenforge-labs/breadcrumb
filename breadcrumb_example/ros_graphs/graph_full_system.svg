@@ -100,22 +100,22 @@
 <!-- /hardware/request/force&#45;&gt;/hardware/cartpole_simulator -->
 <g id="edge6" class="edge">
 <title>/hardware/request/force&#45;&gt;/hardware/cartpole_simulator</title>
-<path fill="none" stroke="black" d="M654.6,-234.72C594.73,-229.93 525.17,-219.79 465,-199 456.14,-195.94 455.79,-191.25 447,-188 437.21,-184.38 330.23,-167.49 243.32,-154.13"/>
-<polygon fill="black" stroke="black" points="654.66,-238.24 664.89,-235.5 655.18,-231.26 654.66,-238.24"/>
+<path fill="none" stroke="black" d="M664.89,-235.5C602.81,-231.07 528.65,-221 465,-199 456.14,-195.94 455.79,-191.25 447,-188 437.58,-184.52 338.24,-168.76 253.33,-155.67"/>
+<polygon fill="black" stroke="black" points="253.73,-152.19 243.32,-154.13 252.67,-159.11 253.73,-152.19"/>
 <text text-anchor="middle" x="354" y="-191.8" font-family="Times,serif" font-size="14.00">sub</text>
 </g>
 <!-- /control/enable&#45;&gt;/cartpole_ui -->
 <g id="edge9" class="edge">
 <title>/control/enable&#45;&gt;/cartpole_ui</title>
-<path fill="none" stroke="black" stroke-dasharray="5,2" d="M940.94,-311.34C1074.89,-302.23 1271.7,-288.83 1385.16,-281.1"/>
-<polygon fill="black" stroke="black" points="940.34,-307.88 930.6,-312.05 940.82,-314.86 940.34,-307.88"/>
+<path fill="none" stroke="black" stroke-dasharray="5,2" d="M930.6,-312.05C1060.78,-303.19 1257.23,-289.81 1375.06,-281.79"/>
+<polygon fill="black" stroke="black" points="1375.42,-285.27 1385.16,-281.1 1374.94,-278.29 1375.42,-285.27"/>
 <text text-anchor="middle" x="1241.26" y="-299.8" font-family="Times,serif" font-size="14.00">call</text>
 </g>
 <!-- /control/track_position&#45;&gt;/cartpole_ui -->
 <g id="edge13" class="edge">
 <title>/control/track_position&#45;&gt;/cartpole_ui</title>
-<path fill="none" stroke="black" stroke-dasharray="1,5" d="M1029.37,-385.66C1066.26,-380.72 1103.92,-374.87 1139.26,-368 1227,-350.95 1247.14,-338.94 1333.26,-315 1357.61,-308.23 1384.29,-300.72 1407.85,-294.04"/>
-<polygon fill="black" stroke="black" points="1028.44,-382.25 1018.98,-387.03 1029.35,-389.19 1028.44,-382.25"/>
+<path fill="none" stroke="black" stroke-dasharray="1,5" d="M1018.98,-387.03C1059.16,-381.81 1100.59,-375.51 1139.26,-368 1227,-350.95 1247.14,-338.94 1333.26,-315 1354.28,-309.16 1377.04,-302.76 1398.03,-296.82"/>
+<polygon fill="black" stroke="black" points="1399.18,-300.13 1407.85,-294.04 1397.28,-293.4 1399.18,-300.13"/>
 <text text-anchor="middle" x="1241.26" y="-368.8" font-family="Times,serif" font-size="14.00">call</text>
 </g>
 <!-- /hardware/robot_state_publisher -->
@@ -170,29 +170,29 @@
 <!-- /hardware/joint_states&#45;&gt;/cartpole_ui -->
 <g id="edge2" class="edge">
 <title>/hardware/joint_states&#45;&gt;/cartpole_ui</title>
-<path fill="none" stroke="orange" stroke-width="2" d="M921.44,-158C986.29,-169.46 1067.24,-184.29 1139.26,-199 1227.03,-216.93 1327.13,-239.94 1394.98,-255.92"/>
-<polygon fill="orange" stroke="orange" stroke-width="2" points="922.03,-154.55 911.58,-156.26 920.82,-161.44 922.03,-154.55"/>
+<path fill="none" stroke="orange" stroke-width="2" d="M911.58,-156.26C977.96,-167.94 1063.55,-183.53 1139.26,-199 1222.92,-216.09 1317.77,-237.8 1385.23,-253.63"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="1384.44,-257.04 1394.98,-255.92 1386.04,-250.23 1384.44,-257.04"/>
 <text text-anchor="middle" x="1241.26" y="-243.8" font-family="Times,serif" font-size="14.00">sub INCOMPATIBLE_QOS</text>
 </g>
 <!-- /hardware/joint_states&#45;&gt;/control/cartpole_controller -->
 <g id="edge3" class="edge">
 <title>/hardware/joint_states&#45;&gt;/control/cartpole_controller</title>
-<path fill="none" stroke="black" d="M675.81,-158.25C612.78,-169.64 534.6,-184.32 465,-199 453.61,-201.4 272.12,-243.54 261,-247 231.74,-256.11 199.67,-268.61 174.64,-278.95"/>
-<polygon fill="black" stroke="black" points="676.57,-161.67 685.79,-156.45 675.32,-154.78 676.57,-161.67"/>
+<path fill="none" stroke="black" d="M685.79,-156.45C621.17,-168.07 538.32,-183.54 465,-199 453.61,-201.4 272.12,-243.54 261,-247 235.28,-255.01 207.39,-265.63 184.02,-275.11"/>
+<polygon fill="black" stroke="black" points="182.57,-271.92 174.64,-278.95 185.22,-278.4 182.57,-271.92"/>
 <text text-anchor="middle" x="354" y="-250.8" font-family="Times,serif" font-size="14.00">sub</text>
 </g>
 <!-- /hardware/joint_states&#45;&gt;/hardware/robot_state_publisher -->
 <g id="edge4" class="edge">
 <title>/hardware/joint_states&#45;&gt;/hardware/robot_state_publisher</title>
-<path fill="none" stroke="black" d="M970.39,-137C1089.12,-137 1244.47,-137 1351.21,-137"/>
-<polygon fill="black" stroke="black" points="970.1,-133.5 960.1,-137 970.1,-140.5 970.1,-133.5"/>
-<text text-anchor="middle" x="1241.26" y="-140.8" font-family="Times,serif" font-size="14.00">sub</text>
+<path fill="none" stroke="orange" stroke-width="2" d="M960.1,-137C1076.39,-137 1231.62,-137 1341.09,-137"/>
+<polygon fill="orange" stroke="orange" stroke-width="2" points="1341.21,-140.5 1351.21,-137 1341.21,-133.5 1341.21,-140.5"/>
+<text text-anchor="middle" x="1241.26" y="-140.8" font-family="Times,serif" font-size="14.00">sub INCOMPATIBLE_QOS</text>
 </g>
 <!-- /hardware/reset&#45;&gt;/cartpole_ui -->
 <g id="edge11" class="edge">
 <title>/hardware/reset&#45;&gt;/cartpole_ui</title>
-<path fill="none" stroke="black" stroke-dasharray="5,2" d="M895.55,-33.78C1015.66,-14.79 1218.96,-4.11 1333.26,-118 1358.96,-143.6 1323.24,-168.75 1343.26,-199 1360.8,-225.49 1390.96,-243.89 1417.98,-255.93"/>
-<polygon fill="black" stroke="black" points="894.93,-30.33 885.62,-35.4 896.06,-37.24 894.93,-30.33"/>
+<path fill="none" stroke="black" stroke-dasharray="5,2" d="M885.62,-35.4C1004.16,-15.49 1215.75,-0.91 1333.26,-118 1358.96,-143.6 1323.24,-168.75 1343.26,-199 1358.81,-222.49 1384.29,-239.61 1408.7,-251.59"/>
+<polygon fill="black" stroke="black" points="1407.44,-254.86 1417.98,-255.93 1410.41,-248.52 1407.44,-254.86"/>
 <text text-anchor="middle" x="1241.26" y="-121.8" font-family="Times,serif" font-size="14.00">call</text>
 </g>
 <!-- /rviz2 -->

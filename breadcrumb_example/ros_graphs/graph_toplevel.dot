@@ -29,19 +29,19 @@ digraph ROS2TopLevel {
 
   // Topic Edges
   "hardware" -> "/hardware/joint_states" [label="pub INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/joint_states" -> "/cartpole_ui" [label="sub INCOMPATIBLE_QOS", dir=back, color=orange, style=bold];
-  "/hardware/joint_states" -> "control" [label="sub", dir=back];
-  "/hardware/joint_states" -> "hardware" [label="sub", dir=back];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="sub INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/hardware/joint_states" -> "control" [label="sub"];
+  "/hardware/joint_states" -> "hardware" [label="sub INCOMPATIBLE_QOS", color=orange, style=bold];
   "control" -> "/hardware/request/force" [label="pub"];
-  "/hardware/request/force" -> "hardware" [label="sub", dir=back];
+  "/hardware/request/force" -> "hardware" [label="sub"];
 
   // Service Edges
   "control" -> "/control/enable" [label="provide", style=dashed];
-  "/control/enable" -> "/cartpole_ui" [label="call", style=dashed, dir=back];
+  "/control/enable" -> "/cartpole_ui" [label="call", style=dashed];
   "hardware" -> "/hardware/reset" [label="provide", style=dashed];
-  "/hardware/reset" -> "/cartpole_ui" [label="call", style=dashed, dir=back];
+  "/hardware/reset" -> "/cartpole_ui" [label="call", style=dashed];
 
   // Action Edges
   "control" -> "/control/track_position" [label="serve", style=dotted];
-  "/control/track_position" -> "/cartpole_ui" [label="call", style=dotted, dir=back];
+  "/control/track_position" -> "/cartpole_ui" [label="call", style=dotted];
 }

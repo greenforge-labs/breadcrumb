@@ -24,7 +24,7 @@ digraph ROS2Group_control {
   "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
 
   // External Topic Edges
-  "/hardware/joint_states" -> "/control/cartpole_controller" [label="sub", dir=back];
+  "/hardware/joint_states" -> "/control/cartpole_controller" [label="sub"];
   "/control/cartpole_controller" -> "/hardware/request/force" [label="pub"];
 
   // External Service Edges
