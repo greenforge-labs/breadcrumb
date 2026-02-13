@@ -1,7 +1,3 @@
-node:
-  name: ${THIS_NODE}
-  package: ${THIS_PACKAGE}
-
 subscribers:
   - topic: requested_force
     type: std_msgs/msg/Float64

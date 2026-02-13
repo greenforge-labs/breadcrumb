@@ -1,7 +1,3 @@
-node:
-  name: ${THIS_NODE}
-  package: ${THIS_PACKAGE}
-
 parameters:
   k1:
     type: double

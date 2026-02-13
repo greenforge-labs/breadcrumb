@@ -1,7 +1,3 @@
-node:
-  name: ${THIS_NODE}
-  package: ${THIS_PACKAGE}
-
 parameters:
   webserver_port:
     type: int
