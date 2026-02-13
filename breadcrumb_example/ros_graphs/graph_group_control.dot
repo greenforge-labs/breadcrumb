@@ -14,8 +14,10 @@ digraph ROS2Group_control {
   }
 
   // External Topics
+  "/cartpole/safety_controller/emergency_stop" [label="/cartpole/safety_controller/emergency_stop\n[std_msgs/msg/Bool]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/cartpole/bumper/emergency_stop" [label="/cartpole/bumper/emergency_stop\n[std_msgs/msg/Bool]", shape=ellipse, style=filled, fillcolor=lightgreen];
   "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
-  "/test/test" [label="/test/test\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/status/cartpole" [label="/status/cartpole\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
   "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
 
   // External Services
@@ -25,8 +27,10 @@ digraph ROS2Group_control {
   "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
 
   // External Topic Edges
+  "/cartpole/safety_controller/emergency_stop" -> "/control/cartpole_controller" [label="subscribed by"];
+  "/cartpole/bumper/emergency_stop" -> "/control/cartpole_controller" [label="subscribed by"];
   "/hardware/joint_states" -> "/control/cartpole_controller" [label="subscribed by"];
-  "/control/cartpole_controller" -> "/test/test" [label="publishes"];
+  "/control/cartpole_controller" -> "/status/cartpole" [label="publishes"];
   "/control/cartpole_controller" -> "/hardware/request/force" [label="publishes"];
 
   // External Service Edges

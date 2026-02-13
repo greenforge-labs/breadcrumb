@@ -9,25 +9,50 @@ parameters:
     default_value: "cartpole_controller"
     description: Name of the controller node for parameter updates
 
-  param_sub_test:
+  robot_id:
     type: string
-    default_value: test
-    description: A test parameter for topic param substitution
+    default_value: "cartpole"
+    description: Identifier for this robot instance, used in topic namespacing
+    read_only: true
+
+  stop_buttons:
+    type: string_array
+    default_value: ["safety_controller", "bumper"]
+    description: Emergency stop buttons shown in the dashboard
     read_only: true
 
 subscribers:
   - topic: joint_states
     type: sensor_msgs/msg/JointState
     qos:
-      history: 10
-      reliability: RELIABLE  # UI wants reliable delivery - MISMATCH with simulator!
-      durability: TRANSIENT_LOCAL  # Also wants late-joiner support - another MISMATCH!
+      history: 1
+      reliability: BEST_EFFORT  # Matches simulator
+      durability: VOLATILE
 
-  - topic: "/test/${param: param_sub_test}"
-    field_name: param_sub_test
-    type: std_msgs/msg/String
+  # Intentional QoS mismatch example: subscribes with RELIABLE + TRANSIENT_LOCAL
+  # to the simulator's BEST_EFFORT + VOLATILE topic. This will NOT receive data,
+  # demonstrating what happens when QoS profiles are incompatible.
+  - topic: joint_states
+    field_name: joint_states_mismatched
+    type: sensor_msgs/msg/JointState
     qos:
       history: 10
+      reliability: RELIABLE
+      durability: TRANSIENT_LOCAL
+
+  - topic: "/status/${param: robot_id}"
+    field_name: controller_status
+    type: std_msgs/msg/String
+    qos:
+      history: 1
+      reliability: RELIABLE
+
+publishers:
+  - topic: "/${param: robot_id}/${for_each_param: stop_buttons}/emergency_stop"
+    field_name: emergency_stops
+    type: std_msgs/msg/Bool
+    qos:
+      history: 1
       reliability: RELIABLE
 
 service_clients:

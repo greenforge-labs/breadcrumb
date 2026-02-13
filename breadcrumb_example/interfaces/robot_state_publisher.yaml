@@ -13,17 +13,12 @@ parameters:
     description: URDF XML string describing the robot
     default_value: ""
     read_only: false
-    validation:
-      not_empty<>: null
 
   publish_frequency:
     type: double
     description: Frequency (Hz) at which to publish transforms
     default_value: 20.0
     read_only: false
-    validation:
-      gt_eq<>: [0.0]
-      lt_eq<>: [1000.0]
 
   frame_prefix:
     type: string
@@ -40,17 +35,18 @@ parameters:
 subscribers:
   - topic: joint_states
     type: sensor_msgs/msg/JointState
-    description: Joint positions used to compute forward kinematics
     qos:
-      profile: SensorDataQoS
+      history: 1
+      reliability: BEST_EFFORT
+      durability: VOLATILE
 
 publishers:
   - topic: robot_description
     type: std_msgs/msg/String
-    description: URDF description of the robot (latched/transient local)
     qos:
-      durability: transient_local
-      depth: 1
+      history: 1
+      reliability: RELIABLE
+      durability: TRANSIENT_LOCAL
 
   # Note: TF transforms are published via tf2_ros::TransformBroadcaster
   # - /tf (tf2_msgs/msg/TFMessage) - moving transforms

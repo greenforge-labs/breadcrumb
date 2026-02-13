@@ -1,10 +1,10 @@
-"""Tests for resolve_name_params() in breadcrumb.graph."""
+"""Tests for resolve_name_params() and expand_for_each_param() in breadcrumb.graph."""
 
 import warnings
 
 import pytest
 
-from breadcrumb.graph import resolve_name_params
+from breadcrumb.graph import expand_for_each_param, resolve_name_params
 from breadcrumb.node_interface import ParameterDefinition
 
 
@@ -132,3 +132,117 @@ class TestResolveNameParams:
                 {"id": _make_param("id", default_value=None)},
             )
         assert result == "/robot/${param:id}/cmd"
+
+
+class TestExpandForEachParam:
+    """Tests for expand_for_each_param()."""
+
+    def test_no_for_each_param(self):
+        """Names without ${for_each_param:...} return a single-element list."""
+        result = expand_for_each_param("/cmd_vel", {}, {})
+        assert result == ["/cmd_vel"]
+
+    def test_no_for_each_param_with_param_ref(self):
+        """Names with only ${param:...} are resolved and returned as single-element list."""
+        result = expand_for_each_param(
+            "/robot/${param:id}/cmd",
+            {"id": "robot1"},
+            {},
+        )
+        assert result == ["/robot/robot1/cmd"]
+
+    def test_basic_expansion_from_launch_params(self):
+        """Basic expansion from a launch parameter list."""
+        result = expand_for_each_param(
+            "/cameras/${for_each_param:camera_names}/image",
+            {"camera_names": ["front", "rear", "left"]},
+            {},
+        )
+        assert result == [
+            "/cameras/front/image",
+            "/cameras/rear/image",
+            "/cameras/left/image",
+        ]
+
+    def test_expansion_from_interface_defaults(self):
+        """Expansion using interface parameter default values."""
+        result = expand_for_each_param(
+            "/sensors/${for_each_param:sensor_list}/data",
+            {},
+            {"sensor_list": _make_param("sensor_list", default_value=["lidar", "radar"], param_type="string_array")},
+        )
+        assert result == [
+            "/sensors/lidar/data",
+            "/sensors/radar/data",
+        ]
+
+    def test_launch_params_priority_over_defaults(self):
+        """Launch parameters take priority over interface defaults."""
+        result = expand_for_each_param(
+            "/topic/${for_each_param:names}/out",
+            {"names": ["alpha", "beta"]},
+            {"names": _make_param("names", default_value=["x", "y", "z"], param_type="string_array")},
+        )
+        assert result == [
+            "/topic/alpha/out",
+            "/topic/beta/out",
+        ]
+
+    def test_coexistence_with_param_ref(self):
+        """${for_each_param:...} and ${param:...} coexist in the same name."""
+        result = expand_for_each_param(
+            "/${param:ns}/${for_each_param:items}/data",
+            {"ns": "fleet", "items": ["cam1", "cam2"]},
+            {},
+        )
+        assert result == [
+            "/fleet/cam1/data",
+            "/fleet/cam2/data",
+        ]
+
+    def test_single_element_array(self):
+        """A single-element array produces one result."""
+        result = expand_for_each_param(
+            "/topic/${for_each_param:names}/out",
+            {"names": ["only"]},
+            {},
+        )
+        assert result == ["/topic/only/out"]
+
+    def test_empty_array(self):
+        """An empty array produces an empty list."""
+        result = expand_for_each_param(
+            "/topic/${for_each_param:names}/out",
+            {"names": []},
+            {},
+        )
+        assert result == []
+
+    def test_non_list_param_warns_and_falls_back(self):
+        """A non-list parameter emits a warning and returns single-element fallback."""
+        with pytest.warns(UserWarning, match="not a list"):
+            result = expand_for_each_param(
+                "/topic/${for_each_param:names}/out",
+                {"names": "not_a_list"},
+                {},
+            )
+        assert len(result) == 1
+
+    def test_missing_param_warns_and_falls_back(self):
+        """A missing parameter emits a warning and returns single-element fallback."""
+        with pytest.warns(UserWarning, match="Could not resolve for_each_param"):
+            result = expand_for_each_param(
+                "/topic/${for_each_param:missing}/out",
+                {},
+                {},
+            )
+        assert len(result) == 1
+
+    def test_whitespace_tolerance(self):
+        """Whitespace around the parameter name in the token is tolerated."""
+        result = expand_for_each_param(
+            "/topic/${for_each_param: names }/out",
+            {"names": ["a", "b"]},
+            {},
+        )
+        assert result == ["/topic/a/out", "/topic/b/out"]

@@ -17,6 +17,7 @@ from werkzeug.serving import run_simple
 
 from rcl_interfaces.msg import ParameterType
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool, String
 
 from rcl_interfaces.srv import GetParameters, SetParameters
 from std_srvs.srv import SetBool, Trigger
@@ -41,6 +42,9 @@ class Context(CartpoleUiContext):
     # SSE client queues
     web_clients: list = field(default_factory=list)
 
+    # Controller status from status topic
+    controller_status: str = ""
+
     # Action client state
     tracking_goal: bool = False
 
@@ -49,10 +53,47 @@ class Context(CartpoleUiContext):
     web_update_rate: float = 0.05  # 20 Hz max (50ms between updates)
 
 
-def joint_states_callback(ctx: Context, msg: JointState):
-    """Callback for joint_states updates - with rate limiting."""
-    # joint_states has: position[0] = cart, position[1] = pole, velocity[0] = cart_vel, velocity[1] = pole_vel
+def push_web_update(ctx: Context):
+    """Push current state to all SSE web clients, with rate limiting."""
+    current_time = time.time()
 
+    with ctx.state_lock:
+        if current_time - ctx.last_web_update_time < ctx.web_update_rate:
+            return
+        ctx.last_web_update_time = current_time
+
+    if not ctx.web_clients:
+        return
+
+    state_data = {
+        "cart_position": ctx.cart_position,
+        "cart_velocity": ctx.cart_velocity,
+        "pole_angle": ctx.pole_angle,
+        "pole_angular_velocity": ctx.pole_angular_velocity,
+        "timestamp": ctx.last_update_time,
+        "tracking": ctx.tracking_goal,
+        "controller_status": ctx.controller_status,
+    }
+
+    disconnected_clients = []
+    for client_queue in ctx.web_clients:
+        try:
+            if client_queue.full():
+                try:
+                    client_queue.get_nowait()
+                except:
+                    pass
+            client_queue.put_nowait(state_data)
+        except Exception as e:
+            disconnected_clients.append(client_queue)
+
+    for client in disconnected_clients:
+        if client in ctx.web_clients:
+            ctx.web_clients.remove(client)
+
+
+def joint_states_callback(ctx: Context, msg: JointState):
+    """Callback for joint_states updates."""
     current_time = time.time()
 
     with ctx.state_lock:
@@ -63,45 +104,13 @@ def joint_states_callback(ctx: Context, msg: JointState):
             ctx.pole_angular_velocity = msg.velocity[1]
             ctx.last_update_time = current_time
 
-        # Rate limit web updates - only send if enough time has passed
-        if current_time - ctx.last_web_update_time < ctx.web_update_rate:
-            return  # Skip this update
+    push_web_update(ctx)
 
-        ctx.last_web_update_time = current_time
 
-    # Only push to web clients if we have clients and passed rate limit
-    if not ctx.web_clients:
-        return
-
-    # Push update to all web clients
-    state_data = {
-        "cart_position": ctx.cart_position,
-        "cart_velocity": ctx.cart_velocity,
-        "pole_angle": ctx.pole_angle,
-        "pole_angular_velocity": ctx.pole_angular_velocity,
-        "timestamp": ctx.last_update_time,
-        "tracking": ctx.tracking_goal,
-    }
-
-    # Clean up disconnected clients while pushing updates
-    disconnected_clients = []
-    for client_queue in ctx.web_clients:
-        try:
-            # Drop oldest item if queue is full to prevent memory buildup
-            if client_queue.full():
-                try:
-                    client_queue.get_nowait()  # Remove oldest
-                except:
-                    pass
-            client_queue.put_nowait(state_data)
-        except Exception as e:
-            # Queue broken or client disconnected
-            disconnected_clients.append(client_queue)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in ctx.web_clients:
-            ctx.web_clients.remove(client)
+def controller_status_callback(ctx: Context, msg: String):
+    """Callback for controller status updates."""
+    ctx.controller_status = msg.data
+    push_web_update(ctx)
 
 
 def create_app(ctx: Context) -> Flask:
@@ -114,7 +123,7 @@ def create_app(ctx: Context) -> Flask:
     @app.route("/")
     def index():
         """Serve the dashboard HTML."""
-        return render_template("dashboard.html")
+        return render_template("dashboard.html", stop_buttons=list(ctx.publishers.emergency_stops.keys()))
 
     @app.route("/events")
     def sse():
@@ -178,6 +187,26 @@ def create_app(ctx: Context) -> Flask:
             return jsonify({"success": True})
         except Exception as e:
             ctx.logger.error(f"Failed to reset simulator: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/emergency_stop", methods=["POST"])
+    def emergency_stop():
+        """Trigger an emergency stop for a specific source."""
+        try:
+            data = request.get_json()
+            source = data.get("source", "")
+
+            if source not in ctx.publishers.emergency_stops:
+                return jsonify({"success": False, "error": f"Unknown stop source: {source}"}), 400
+
+            msg = Bool()
+            msg.data = True
+            ctx.publishers.emergency_stops[source].publish(msg)
+
+            ctx.logger.info(f"Emergency stop triggered for source: {source}")
+            return jsonify({"success": True, "source": source})
+        except Exception as e:
+            ctx.logger.error(f"Failed to trigger emergency stop: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/track_position", methods=["POST"])
@@ -351,6 +380,7 @@ def init(ctx: Context):
     """Initialize the cartpole UI node."""
     # Set up ROS callbacks
     ctx.subscribers.joint_states.set_callback(joint_states_callback)
+    ctx.subscribers.controller_status.set_callback(controller_status_callback)
 
     # Start Flask webserver in separate thread using cake's thread utility
     create_thread(ctx, run_webserver)

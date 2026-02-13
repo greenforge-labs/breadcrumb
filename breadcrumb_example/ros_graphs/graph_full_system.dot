@@ -8,6 +8,8 @@ digraph ROS2Graph {
     fillcolor=lightgrey;
 
     "/cartpole_ui" [label="/cartpole_ui\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
+    "/cartpole/safety_controller/emergency_stop" [label="/cartpole/safety_controller/emergency_stop\n[std_msgs/msg/Bool]", shape=ellipse, style=filled, fillcolor=lightgreen];
+    "/cartpole/bumper/emergency_stop" [label="/cartpole/bumper/emergency_stop\n[std_msgs/msg/Bool]", shape=ellipse, style=filled, fillcolor=lightgreen];
   }
 
   subgraph cluster__control_cartpole_controller {
@@ -16,7 +18,7 @@ digraph ROS2Graph {
     fillcolor=lightgrey;
 
     "/control/cartpole_controller" [label="/control/cartpole_controller\n(breadcrumb_example)", style=filled, fillcolor=lightblue];
-    "/test/test" [label="/test/test\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
+    "/status/cartpole" [label="/status/cartpole\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
     "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
     "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
     "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
@@ -50,12 +52,17 @@ digraph ROS2Graph {
   }
 
   // Topic Edges
-  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="publishes INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/cartpole_ui" -> "/cartpole/safety_controller/emergency_stop" [label="publishes"];
+  "/cartpole/safety_controller/emergency_stop" -> "/control/cartpole_controller" [label="subscribed by"];
+  "/cartpole_ui" -> "/cartpole/bumper/emergency_stop" [label="publishes"];
+  "/cartpole/bumper/emergency_stop" -> "/control/cartpole_controller" [label="subscribed by"];
+  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="publishes (INCOMPATIBLE QOS)", color=orange, style=bold];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by"];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by (INCOMPATIBLE QOS)", color=orange, style=bold];
   "/hardware/joint_states" -> "/control/cartpole_controller" [label="subscribed by"];
-  "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/control/cartpole_controller" -> "/test/test" [label="publishes"];
-  "/test/test" -> "/cartpole_ui" [label="subscribed by"];
+  "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="subscribed by"];
+  "/control/cartpole_controller" -> "/status/cartpole" [label="publishes"];
+  "/status/cartpole" -> "/cartpole_ui" [label="subscribed by"];
   "/control/cartpole_controller" -> "/hardware/request/force" [label="publishes"];
   "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="subscribed by"];
   "/hardware/robot_state_publisher" -> "/hardware/robot_description" [label="publishes"];

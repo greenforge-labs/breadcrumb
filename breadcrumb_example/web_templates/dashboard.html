@@ -192,22 +192,39 @@
             gap: 12px;
         }
 
-        .tracking-status {
-            padding: 8px;
-            border-radius: 6px;
-            text-align: center;
-            margin-bottom: 12px;
+        .status-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .status-label {
+            font-weight: 500;
+            color: #4a5568;
+            margin-right: 8px;
+            min-width: 70px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
             font-weight: 600;
         }
 
-        .tracking-active {
+        .status-active {
             background: #bee3f8;
             color: #2c5282;
         }
 
-        .tracking-inactive {
+        .status-inactive {
             background: #e2e8f0;
             color: #718096;
+        }
+
+        .status-estop {
+            background: #fed7d7;
+            color: #c53030;
         }
     </style>
 </head>
@@ -247,12 +264,27 @@
             <!-- Control Card -->
             <div class="card">
                 <h2>Controller</h2>
-                <div id="tracking-status" class="tracking-status tracking-inactive">
-                    Not Tracking
+                <div class="status-row">
+                    <span class="status-label">Status:</span>
+                    <span id="controller-status" class="status-badge status-inactive">Unknown</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Tracking:</span>
+                    <span id="tracking-status" class="status-badge status-inactive">Not Tracking</span>
                 </div>
                 <button class="btn-success" onclick="enableController()">Enable Controller</button>
                 <button class="btn-danger" onclick="disableController()">Disable Controller</button>
                 <button class="btn-warning" onclick="resetSimulator()">Reset Simulator</button>
+            </div>
+
+            <!-- Emergency Stop Card -->
+            <div class="card">
+                <h2>Emergency Stop</h2>
+                {% for button in stop_buttons %}
+                <button class="btn-danger" onclick="triggerEmergencyStop('{{ button }}')">
+                    STOP: {{ button }}
+                </button>
+                {% endfor %}
             </div>
 
             <!-- Position Tracking Card -->
@@ -301,6 +333,7 @@
         const statusIndicator = document.getElementById('status-indicator');
         const connectionText = document.getElementById('connection-text');
         const trackingStatus = document.getElementById('tracking-status');
+        const controllerStatus = document.getElementById('controller-status');
 
         // Connect to SSE stream
         function connectSSE() {
@@ -330,12 +363,28 @@
             document.getElementById('pole-angle').textContent = data.pole_angle.toFixed(3);
             document.getElementById('pole-velocity').textContent = data.pole_angular_velocity.toFixed(3);
 
+            if (data.controller_status) {
+                try {
+                    const status = JSON.parse(data.controller_status);
+                    if (status.emergency_stopped) {
+                        controllerStatus.textContent = 'EMERGENCY STOPPED';
+                        controllerStatus.className = 'status-badge status-estop';
+                    } else if (status.enabled) {
+                        controllerStatus.textContent = 'Enabled';
+                        controllerStatus.className = 'status-badge status-active';
+                    } else {
+                        controllerStatus.textContent = 'Disabled';
+                        controllerStatus.className = 'status-badge status-inactive';
+                    }
+                } catch (e) {}
+            }
+
             if (data.tracking) {
                 trackingStatus.textContent = 'Tracking Position';
-                trackingStatus.className = 'tracking-status tracking-active';
+                trackingStatus.className = 'status-badge status-active';
             } else {
                 trackingStatus.textContent = 'Not Tracking';
-                trackingStatus.className = 'tracking-status tracking-inactive';
+                trackingStatus.className = 'status-badge status-inactive';
             }
         }
 
@@ -381,6 +430,22 @@
                 const result = await response.json();
                 if (!result.success) {
                     console.error('Failed to reset simulator:', result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function triggerEmergencyStop(source) {
+            try {
+                const response = await fetch('/api/emergency_stop', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({source: source})
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    console.error('Failed to trigger emergency stop:', result.error);
                 }
             } catch (error) {
                 console.error('Error:', error);

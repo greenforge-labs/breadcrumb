@@ -8,7 +8,7 @@ digraph ROS2TopLevel {
     fillcolor=lightgrey;
 
     "control" [label="control\n(1 node)", style=filled, fillcolor=lightblue];
-    "/test/test" [label="/test/test\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
+    "/status/cartpole" [label="/status/cartpole\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
     "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
     "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
     "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
@@ -28,13 +28,22 @@ digraph ROS2TopLevel {
   "/cartpole_ui" [label="/cartpole_ui\n(breadcrumb_example)", style=filled, fillcolor=lightyellow];
   "/rviz2" [label="/rviz2\n(rviz2)", style=filled, fillcolor=lightyellow];
 
+  // Shared Topics
+  "/cartpole/safety_controller/emergency_stop" [label="/cartpole/safety_controller/emergency_stop\n[std_msgs/msg/Bool]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/cartpole/bumper/emergency_stop" [label="/cartpole/bumper/emergency_stop\n[std_msgs/msg/Bool]", shape=ellipse, style=filled, fillcolor=lightgreen];
+
   // Topic Edges
-  "hardware" -> "/hardware/joint_states" [label="publishes INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/cartpole_ui" -> "/cartpole/safety_controller/emergency_stop" [label="publishes"];
+  "/cartpole/safety_controller/emergency_stop" -> "control" [label="subscribed by"];
+  "/cartpole_ui" -> "/cartpole/bumper/emergency_stop" [label="publishes"];
+  "/cartpole/bumper/emergency_stop" -> "control" [label="subscribed by"];
+  "hardware" -> "/hardware/joint_states" [label="publishes (INCOMPATIBLE QOS)", color=orange, style=bold];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by"];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by (INCOMPATIBLE QOS)", color=orange, style=bold];
   "/hardware/joint_states" -> "control" [label="subscribed by"];
-  "/hardware/joint_states" -> "hardware" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
-  "control" -> "/test/test" [label="publishes"];
-  "/test/test" -> "/cartpole_ui" [label="subscribed by"];
+  "/hardware/joint_states" -> "hardware" [label="subscribed by"];
+  "control" -> "/status/cartpole" [label="publishes"];
+  "/status/cartpole" -> "/cartpole_ui" [label="subscribed by"];
   "control" -> "/hardware/request/force" [label="publishes"];
   "/hardware/request/force" -> "hardware" [label="subscribed by"];
 

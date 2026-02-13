@@ -23,10 +23,16 @@ parameters:
     description: State feedback gain for pole angular velocity
     read_only: false
 
-  param_sub_test:
+  robot_id:
     type: string
-    default_value: test
-    description: A test parameter for topic param substitution
+    default_value: "cartpole"
+    description: Identifier for this robot instance, used in topic namespacing
+    read_only: true
+
+  safety_stop_sources:
+    type: string_array
+    default_value: ["safety_controller", "bumper"]
+    description: Safety systems that can trigger an emergency stop
     read_only: true
 
 subscribers:
@@ -37,6 +43,13 @@ subscribers:
       reliability: BEST_EFFORT  # Matches simulator - compatible!
       durability: VOLATILE
 
+  - topic: "/${param: robot_id}/${for_each_param: safety_stop_sources}/emergency_stop"
+    field_name: emergency_stops
+    type: std_msgs/msg/Bool
+    qos:
+      history: 1
+      reliability: RELIABLE
+
 publishers:
   - topic: force
     type: std_msgs/msg/Float64
@@ -45,11 +58,11 @@ publishers:
       reliability: RELIABLE
       durability: VOLATILE
 
-  - topic: "/test/${param: param_sub_test}"
-    field_name: param_sub_test
+  - topic: "/status/${param: robot_id}"
+    field_name: status
     type: std_msgs/msg/String
     qos:
-      history: 10
+      history: 1
       reliability: RELIABLE
 
 services:

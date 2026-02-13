@@ -2,7 +2,9 @@
 #include <breadcrumb_example_interfaces/action/track_position.hpp>
 #include <cake/timer.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 
 namespace breadcrumb_example::cartpole_controller {
@@ -47,11 +49,21 @@ void enable_handler(
     ctx->enabled = request->data;
     response->success = true;
     if (ctx->enabled) {
+        ctx->emergency_stopped = false;
         response->message = "Controller enabled";
-        RCLCPP_INFO(ctx->node->get_logger(), "Controller enabled");
+        RCLCPP_INFO(ctx->node->get_logger(), "Controller enabled, emergency stop cleared");
     } else {
         response->message = "Controller disabled";
         RCLCPP_INFO(ctx->node->get_logger(), "Controller disabled");
+    }
+}
+
+// Emergency stop callback - triggered by any safety source
+void emergency_stop_callback(std::shared_ptr<Context> ctx, std_msgs::msg::Bool::ConstSharedPtr msg) {
+    if (msg->data) {
+        ctx->emergency_stopped = true;
+        ctx->enabled = false;
+        RCLCPP_WARN(ctx->node->get_logger(), "Emergency stop triggered!");
     }
 }
 
@@ -109,6 +121,12 @@ void control_timer_callback(std::shared_ptr<Context> ctx) {
     // Update action tracking (check for goals, send feedback, complete if reached)
     update_action_tracking(ctx);
 
+    // Publish status message
+    auto status_msg = std_msgs::msg::String();
+    status_msg.data = "{\"enabled\":" + std::string(ctx->enabled ? "true" : "false") +
+                      ",\"emergency_stopped\":" + std::string(ctx->emergency_stopped ? "true" : "false") + "}";
+    ctx->publishers.status->publish(status_msg);
+
     // Don't publish if controller is disabled or we haven't received state yet
     if (!ctx->enabled || !ctx->state_received) {
         return;
@@ -130,9 +148,9 @@ void control_timer_callback(std::shared_ptr<Context> ctx) {
         -(k1 * position_error + k2 * ctx->cart_velocity + k3 * ctx->pole_angle + k4 * ctx->pole_angular_velocity);
 
     // Publish control force
-    auto msg = std_msgs::msg::Float64();
-    msg.data = control_force;
-    ctx->publishers.force->publish(msg);
+    auto force_msg = std_msgs::msg::Float64();
+    force_msg.data = control_force;
+    ctx->publishers.force->publish(force_msg);
 }
 
 void init(std::shared_ptr<Context> ctx) {
@@ -146,6 +164,11 @@ void init(std::shared_ptr<Context> ctx) {
     cake::SingleGoalActionServerOptions<breadcrumb_example_interfaces::action::TrackPosition> action_options;
     action_options.new_goals_replace_current_goal = true; // Allow updating the setpoint
     ctx->actions.track_position->set_options(action_options);
+
+    // Set up emergency stop subscribers (for_each_param creates one per safety source)
+    for (auto &[source, sub] : ctx->subscribers.emergency_stops) {
+        sub->set_callback(emergency_stop_callback);
+    }
 
     // Create control timer (50 Hz to match simulator)
     cake::create_timer(ctx, std::chrono::milliseconds(20), control_timer_callback);

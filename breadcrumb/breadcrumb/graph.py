@@ -9,6 +9,7 @@ from clingwrap.static_info import ComposableNodeInfo, NodeInfo
 
 from .helpers import LaunchFileSource
 from .node_interface import (
+    _FOR_EACH_PARAM_PATTERN,
     _PARAM_SUB_PATTERN,
     DurabilityPolicy,
     LivelinessPolicy,
@@ -16,7 +17,9 @@ from .node_interface import (
     ParameterDefinition,
     QoS,
     ReliabilityPolicy,
+    _contains_for_each_param,
     _contains_param_reference,
+    _extract_for_each_param_name,
     _extract_param_name,
     _is_param_reference,
 )
@@ -233,6 +236,71 @@ def resolve_name_params(
         return match.group(0)
 
     return _PARAM_SUB_PATTERN.sub(_replace_match, name)
+
+
+def expand_for_each_param(
+    name: str,
+    node_parameters: dict[str, Any],
+    interface_parameters: dict[str, ParameterDefinition],
+) -> list[str]:
+    """
+    Expand ${for_each_param:name} tokens in entity names.
+
+    If the name contains a ${for_each_param:param_name} token, the referenced
+    parameter must be a list. One resolved name is produced per list element,
+    with the token replaced by that element. Any ${param:...} references are
+    resolved afterwards via resolve_name_params().
+
+    If no ${for_each_param:...} is present the name is resolved normally and
+    returned as a single-element list (backward compatible).
+
+    Args:
+        name: Entity name potentially containing ${for_each_param:...}
+        node_parameters: Parameters from the launch file
+        interface_parameters: Parameter definitions from interface.yaml
+
+    Returns:
+        List of resolved names (one per array element, or a single-element list)
+    """
+    if not _contains_for_each_param(name):
+        return [resolve_name_params(name, node_parameters, interface_parameters)]
+
+    param_name = _extract_for_each_param_name(name)
+    if param_name is None:
+        return [resolve_name_params(name, node_parameters, interface_parameters)]
+
+    # Look up parameter value: launch params first, then interface defaults
+    param_value = None
+    if param_name in node_parameters and node_parameters[param_name] is not None:
+        param_value = node_parameters[param_name]
+    elif param_name in interface_parameters:
+        default = interface_parameters[param_name].default_value
+        if default is not None:
+            param_value = default
+
+    if param_value is None:
+        warnings.warn(
+            f"Could not resolve for_each_param '{param_name}' in name '{name}'",
+            UserWarning,
+            stacklevel=2,
+        )
+        return [resolve_name_params(name, node_parameters, interface_parameters)]
+
+    if not isinstance(param_value, list):
+        warnings.warn(
+            f"for_each_param '{param_name}' is not a list (got {type(param_value).__name__}) in name '{name}'",
+            UserWarning,
+            stacklevel=2,
+        )
+        return [resolve_name_params(name, node_parameters, interface_parameters)]
+
+    results: list[str] = []
+    for element in param_value:
+        expanded = _FOR_EACH_PARAM_PATTERN.sub(str(element), name)
+        resolved = resolve_name_params(expanded, node_parameters, interface_parameters)
+        results.append(resolved)
+
+    return results
 
 
 def resolve_qos(
@@ -495,7 +563,10 @@ def build_graph(
         parameters = {}
         if node_info.parameters:
             for key, value in node_info.parameters.items():
-                parameters[str(key)] = str(value) if value is not None else None
+                if isinstance(value, list):
+                    parameters[str(key)] = value
+                else:
+                    parameters[str(key)] = str(value) if value is not None else None
 
         # Create Node object
         node = Node(
@@ -521,123 +592,93 @@ def build_graph(
 
         # Process publishers
         for pub in interface.publishers:
-            # Resolve parameter substitutions in name
-            resolved_topic = resolve_name_params(pub.topic, parameters, interface.parameters)
-            # Apply remappings
-            remapped_topic = apply_remappings(resolved_topic, remappings)
-            # Resolve topic name
-            final_topic = resolve_name(remapped_topic, fqn, namespace)
-
-            # Skip hidden topics if not including them
-            if not include_hidden and _is_hidden(final_topic):
-                continue
-
-            # Resolve QoS parameters
+            expanded_topics = expand_for_each_param(pub.topic, parameters, interface.parameters)
             resolved_qos = resolve_qos(pub.qos, parameters, interface.parameters)
+            for resolved_topic in expanded_topics:
+                remapped_topic = apply_remappings(resolved_topic, remappings)
+                final_topic = resolve_name(remapped_topic, fqn, namespace)
 
-            # Create TopicConnection
-            pub_conn = TopicConnection(node=node, qos=resolved_qos)
+                if not include_hidden and _is_hidden(final_topic):
+                    continue
 
-            # Create or update Topic object
-            if final_topic not in topics_dict:
-                topics_dict[final_topic] = Topic(name=final_topic, msg_type=pub.type)
-            topics_dict[final_topic].publishers.append(pub_conn)
+                pub_conn = TopicConnection(node=node, qos=resolved_qos)
+
+                if final_topic not in topics_dict:
+                    topics_dict[final_topic] = Topic(name=final_topic, msg_type=pub.type)
+                topics_dict[final_topic].publishers.append(pub_conn)
 
         # Process subscribers
         for sub in interface.subscribers:
-            # Resolve parameter substitutions in name
-            resolved_topic = resolve_name_params(sub.topic, parameters, interface.parameters)
-            # Apply remappings
-            remapped_topic = apply_remappings(resolved_topic, remappings)
-            # Resolve topic name
-            final_topic = resolve_name(remapped_topic, fqn, namespace)
-
-            # Skip hidden topics if not including them
-            if not include_hidden and _is_hidden(final_topic):
-                continue
-
-            # Resolve QoS parameters
+            expanded_topics = expand_for_each_param(sub.topic, parameters, interface.parameters)
             resolved_qos = resolve_qos(sub.qos, parameters, interface.parameters)
+            for resolved_topic in expanded_topics:
+                remapped_topic = apply_remappings(resolved_topic, remappings)
+                final_topic = resolve_name(remapped_topic, fqn, namespace)
 
-            # Create TopicConnection
-            sub_conn = TopicConnection(node=node, qos=resolved_qos)
+                if not include_hidden and _is_hidden(final_topic):
+                    continue
 
-            # Create or update Topic object
-            if final_topic not in topics_dict:
-                topics_dict[final_topic] = Topic(name=final_topic, msg_type=sub.type)
-            topics_dict[final_topic].subscribers.append(sub_conn)
+                sub_conn = TopicConnection(node=node, qos=resolved_qos)
+
+                if final_topic not in topics_dict:
+                    topics_dict[final_topic] = Topic(name=final_topic, msg_type=sub.type)
+                topics_dict[final_topic].subscribers.append(sub_conn)
 
         # Process services (providers)
         for svc in interface.services:
-            # Resolve parameter substitutions in name
-            resolved_service = resolve_name_params(svc.name, parameters, interface.parameters)
-            # Apply remappings
-            remapped_service = apply_remappings(resolved_service, remappings)
-            # Resolve service name
-            final_service = resolve_name(remapped_service, fqn, namespace)
+            expanded_services = expand_for_each_param(svc.name, parameters, interface.parameters)
+            for resolved_service in expanded_services:
+                remapped_service = apply_remappings(resolved_service, remappings)
+                final_service = resolve_name(remapped_service, fqn, namespace)
 
-            # Skip hidden services if not including them
-            if not include_hidden and _is_hidden(final_service):
-                continue
+                if not include_hidden and _is_hidden(final_service):
+                    continue
 
-            # Create or update Service object
-            if final_service not in services_dict:
-                services_dict[final_service] = Service(name=final_service, srv_type=svc.type)
-            services_dict[final_service].providers.append(node)
+                if final_service not in services_dict:
+                    services_dict[final_service] = Service(name=final_service, srv_type=svc.type)
+                services_dict[final_service].providers.append(node)
 
         # Process service clients
         for svc_client in interface.service_clients:
-            # Resolve parameter substitutions in name
-            resolved_service = resolve_name_params(svc_client.name, parameters, interface.parameters)
-            # Apply remappings
-            remapped_service = apply_remappings(resolved_service, remappings)
-            # Resolve service name
-            final_service = resolve_name(remapped_service, fqn, namespace)
+            expanded_services = expand_for_each_param(svc_client.name, parameters, interface.parameters)
+            for resolved_service in expanded_services:
+                remapped_service = apply_remappings(resolved_service, remappings)
+                final_service = resolve_name(remapped_service, fqn, namespace)
 
-            # Skip hidden services if not including them
-            if not include_hidden and _is_hidden(final_service):
-                continue
+                if not include_hidden and _is_hidden(final_service):
+                    continue
 
-            # Create or update Service object
-            if final_service not in services_dict:
-                services_dict[final_service] = Service(name=final_service, srv_type=svc_client.type)
-            services_dict[final_service].clients.append(node)
+                if final_service not in services_dict:
+                    services_dict[final_service] = Service(name=final_service, srv_type=svc_client.type)
+                services_dict[final_service].clients.append(node)
 
         # Process actions (servers)
         for act in interface.actions:
-            # Resolve parameter substitutions in name
-            resolved_action = resolve_name_params(act.name, parameters, interface.parameters)
-            # Apply remappings
-            remapped_action = apply_remappings(resolved_action, remappings)
-            # Resolve action name
-            final_action = resolve_name(remapped_action, fqn, namespace)
+            expanded_actions = expand_for_each_param(act.name, parameters, interface.parameters)
+            for resolved_action in expanded_actions:
+                remapped_action = apply_remappings(resolved_action, remappings)
+                final_action = resolve_name(remapped_action, fqn, namespace)
 
-            # Skip hidden actions if not including them
-            if not include_hidden and _is_hidden(final_action):
-                continue
+                if not include_hidden and _is_hidden(final_action):
+                    continue
 
-            # Create or update Action object
-            if final_action not in actions_dict:
-                actions_dict[final_action] = Action(name=final_action, action_type=act.type)
-            actions_dict[final_action].servers.append(node)
+                if final_action not in actions_dict:
+                    actions_dict[final_action] = Action(name=final_action, action_type=act.type)
+                actions_dict[final_action].servers.append(node)
 
         # Process action clients
         for act_client in interface.action_clients:
-            # Resolve parameter substitutions in name
-            resolved_action = resolve_name_params(act_client.name, parameters, interface.parameters)
-            # Apply remappings
-            remapped_action = apply_remappings(resolved_action, remappings)
-            # Resolve action name
-            final_action = resolve_name(remapped_action, fqn, namespace)
+            expanded_actions = expand_for_each_param(act_client.name, parameters, interface.parameters)
+            for resolved_action in expanded_actions:
+                remapped_action = apply_remappings(resolved_action, remappings)
+                final_action = resolve_name(remapped_action, fqn, namespace)
 
-            # Skip hidden actions if not including them
-            if not include_hidden and _is_hidden(final_action):
-                continue
+                if not include_hidden and _is_hidden(final_action):
+                    continue
 
-            # Create or update Action object
-            if final_action not in actions_dict:
-                actions_dict[final_action] = Action(name=final_action, action_type=act_client.type)
-            actions_dict[final_action].clients.append(node)
+                if final_action not in actions_dict:
+                    actions_dict[final_action] = Action(name=final_action, action_type=act_client.type)
+                actions_dict[final_action].clients.append(node)
 
     # Convert dictionaries to lists
     graph.topics = list(topics_dict.values())

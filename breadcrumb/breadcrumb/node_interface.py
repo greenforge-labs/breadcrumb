@@ -111,6 +111,7 @@ class NodeInterface:
 
 
 _PARAM_SUB_PATTERN = re.compile(r"\$\{param:\s*([^}]+?)\s*\}")
+_FOR_EACH_PARAM_PATTERN = re.compile(r"\$\{for_each_param:\s*([^}]+?)\s*\}")
 
 
 def _is_param_reference(value: Any) -> bool:
@@ -131,6 +132,19 @@ def _extract_param_name(value: str) -> str | None:
     """Extract parameter name from ${param:name} reference."""
     match = re.match(r"^\$\{param:([^}]+)\}$", value)
     return match.group(1) if match else None
+
+
+def _contains_for_each_param(value: Any) -> bool:
+    """Check if a value contains any ${for_each_param:name} reference."""
+    if isinstance(value, str):
+        return bool(_FOR_EACH_PARAM_PATTERN.search(value))
+    return False
+
+
+def _extract_for_each_param_name(value: str) -> str | None:
+    """Extract parameter name from ${for_each_param:name} reference."""
+    match = _FOR_EACH_PARAM_PATTERN.search(value)
+    return match.group(1).strip() if match else None
 
 
 def parse_qos_raw(qos_data: dict[str, Any] | None) -> QoS | None:
