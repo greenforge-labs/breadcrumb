@@ -4,7 +4,7 @@ A complete ROS2 cartpole (inverted pendulum) control system demonstrating the in
 
 ![Demo](./demo.gif)
 
-![System Graph](./ros_graphs/graph_full_system.svg)
+![System Graph](./ros_graphs/graph_toplevel.svg)
 
 ## Overview
 

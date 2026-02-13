@@ -2,17 +2,21 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
+import warnings
 
 from clingwrap.static_info import ComposableNodeInfo, NodeInfo
 
 from .helpers import LaunchFileSource
 from .node_interface import (
+    _PARAM_SUB_PATTERN,
     DurabilityPolicy,
     LivelinessPolicy,
     NodeInterface,
     ParameterDefinition,
     QoS,
     ReliabilityPolicy,
+    _contains_param_reference,
     _extract_param_name,
     _is_param_reference,
 )
@@ -179,6 +183,56 @@ def apply_remappings(name: str, remappings: dict[Any, Any] | None) -> str:
             return target_str
 
     return name
+
+
+def resolve_name_params(
+    name: str,
+    node_parameters: dict[str, Any],
+    interface_parameters: dict[str, ParameterDefinition],
+) -> str:
+    """
+    Resolve ${param:name} substitutions in entity names.
+
+    Supports partial and multiple substitutions (e.g., /robot/${param:id}/cmd_vel).
+
+    Parameter resolution order:
+    1. Launch file parameters (node_parameters)
+    2. Default values from interface.yaml (interface_parameters)
+    3. If unresolvable, leave the reference as-is and emit a warning.
+
+    Args:
+        name: Entity name potentially containing ${param:name} references
+        node_parameters: Parameters from the launch file
+        interface_parameters: Parameter definitions from interface.yaml
+
+    Returns:
+        Name with parameter references resolved
+    """
+    if not _contains_param_reference(name):
+        return name
+
+    def _replace_match(match: re.Match) -> str:
+        param_name = match.group(1).strip()
+
+        # First check launch file parameters
+        if param_name in node_parameters and node_parameters[param_name] is not None:
+            return str(node_parameters[param_name])
+
+        # Fall back to interface parameter default
+        if param_name in interface_parameters:
+            default = interface_parameters[param_name].default_value
+            if default is not None:
+                return str(default)
+
+        # Unresolvable — warn and leave as-is
+        warnings.warn(
+            f"Could not resolve parameter '{param_name}' in name '{name}'",
+            UserWarning,
+            stacklevel=2,
+        )
+        return match.group(0)
+
+    return _PARAM_SUB_PATTERN.sub(_replace_match, name)
 
 
 def resolve_qos(
@@ -467,8 +521,10 @@ def build_graph(
 
         # Process publishers
         for pub in interface.publishers:
+            # Resolve parameter substitutions in name
+            resolved_topic = resolve_name_params(pub.topic, parameters, interface.parameters)
             # Apply remappings
-            remapped_topic = apply_remappings(pub.topic, remappings)
+            remapped_topic = apply_remappings(resolved_topic, remappings)
             # Resolve topic name
             final_topic = resolve_name(remapped_topic, fqn, namespace)
 
@@ -489,8 +545,10 @@ def build_graph(
 
         # Process subscribers
         for sub in interface.subscribers:
+            # Resolve parameter substitutions in name
+            resolved_topic = resolve_name_params(sub.topic, parameters, interface.parameters)
             # Apply remappings
-            remapped_topic = apply_remappings(sub.topic, remappings)
+            remapped_topic = apply_remappings(resolved_topic, remappings)
             # Resolve topic name
             final_topic = resolve_name(remapped_topic, fqn, namespace)
 
@@ -511,8 +569,10 @@ def build_graph(
 
         # Process services (providers)
         for svc in interface.services:
+            # Resolve parameter substitutions in name
+            resolved_service = resolve_name_params(svc.name, parameters, interface.parameters)
             # Apply remappings
-            remapped_service = apply_remappings(svc.name, remappings)
+            remapped_service = apply_remappings(resolved_service, remappings)
             # Resolve service name
             final_service = resolve_name(remapped_service, fqn, namespace)
 
@@ -527,8 +587,10 @@ def build_graph(
 
         # Process service clients
         for svc_client in interface.service_clients:
+            # Resolve parameter substitutions in name
+            resolved_service = resolve_name_params(svc_client.name, parameters, interface.parameters)
             # Apply remappings
-            remapped_service = apply_remappings(svc_client.name, remappings)
+            remapped_service = apply_remappings(resolved_service, remappings)
             # Resolve service name
             final_service = resolve_name(remapped_service, fqn, namespace)
 
@@ -543,8 +605,10 @@ def build_graph(
 
         # Process actions (servers)
         for act in interface.actions:
+            # Resolve parameter substitutions in name
+            resolved_action = resolve_name_params(act.name, parameters, interface.parameters)
             # Apply remappings
-            remapped_action = apply_remappings(act.name, remappings)
+            remapped_action = apply_remappings(resolved_action, remappings)
             # Resolve action name
             final_action = resolve_name(remapped_action, fqn, namespace)
 
@@ -559,8 +623,10 @@ def build_graph(
 
         # Process action clients
         for act_client in interface.action_clients:
+            # Resolve parameter substitutions in name
+            resolved_action = resolve_name_params(act_client.name, parameters, interface.parameters)
             # Apply remappings
-            remapped_action = apply_remappings(act_client.name, remappings)
+            remapped_action = apply_remappings(resolved_action, remappings)
             # Resolve action name
             final_action = resolve_name(remapped_action, fqn, namespace)
 

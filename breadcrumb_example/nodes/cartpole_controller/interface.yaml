@@ -27,6 +27,12 @@ parameters:
     description: State feedback gain for pole angular velocity
     read_only: false
 
+  param_sub_test:
+    type: string
+    default_value: test
+    description: A test parameter for topic param substitution
+    read_only: true
+
 subscribers:
   - topic: joint_states
     type: sensor_msgs/msg/JointState
@@ -42,6 +48,13 @@ publishers:
       history: 10
       reliability: RELIABLE
       durability: VOLATILE
+
+  - topic: "/test/${param: param_sub_test}"
+    field_name: param_sub_test
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 
 services:
   - name: enable

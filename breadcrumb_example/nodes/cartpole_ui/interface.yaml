@@ -13,6 +13,12 @@ parameters:
     default_value: "cartpole_controller"
     description: Name of the controller node for parameter updates
 
+  param_sub_test:
+    type: string
+    default_value: test
+    description: A test parameter for topic param substitution
+    read_only: true
+
 subscribers:
   - topic: joint_states
     type: sensor_msgs/msg/JointState
@@ -20,6 +26,13 @@ subscribers:
       history: 10
       reliability: RELIABLE  # UI wants reliable delivery - MISMATCH with simulator!
       durability: TRANSIENT_LOCAL  # Also wants late-joiner support - another MISMATCH!
+
+  - topic: "/test/${param: param_sub_test}"
+    field_name: param_sub_test
+    type: std_msgs/msg/String
+    qos:
+      history: 10
+      reliability: RELIABLE
 
 service_clients:
   - name: enable_controller

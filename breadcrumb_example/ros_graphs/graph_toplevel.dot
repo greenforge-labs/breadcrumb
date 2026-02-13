@@ -8,6 +8,7 @@ digraph ROS2TopLevel {
     fillcolor=lightgrey;
 
     "control" [label="control\n(1 node)", style=filled, fillcolor=lightblue];
+    "/test/test" [label="/test/test\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
     "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
     "/control/enable" [label="/control/enable\n[std_srvs/srv/SetBool]", shape=diamond, style=filled, fillcolor=lightyellow];
     "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
@@ -28,12 +29,14 @@ digraph ROS2TopLevel {
   "/rviz2" [label="/rviz2\n(rviz2)", style=filled, fillcolor=lightyellow];
 
   // Topic Edges
-  "hardware" -> "/hardware/joint_states" [label="pub INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/joint_states" -> "/cartpole_ui" [label="subbed by INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/joint_states" -> "control" [label="subbed by"];
-  "/hardware/joint_states" -> "hardware" [label="subbed by INCOMPATIBLE_QOS", color=orange, style=bold];
-  "control" -> "/hardware/request/force" [label="pub"];
-  "/hardware/request/force" -> "hardware" [label="subbed by"];
+  "hardware" -> "/hardware/joint_states" [label="publishes INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/hardware/joint_states" -> "/cartpole_ui" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/hardware/joint_states" -> "control" [label="subscribed by"];
+  "/hardware/joint_states" -> "hardware" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
+  "control" -> "/test/test" [label="publishes"];
+  "/test/test" -> "/cartpole_ui" [label="subscribed by"];
+  "control" -> "/hardware/request/force" [label="publishes"];
+  "/hardware/request/force" -> "hardware" [label="subscribed by"];
 
   // Service Edges
   "/control/enable" -> "control" [label="provided by", style=dashed];

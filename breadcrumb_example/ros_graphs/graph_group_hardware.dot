@@ -25,12 +25,12 @@ digraph ROS2Group_hardware {
   "/hardware/reset" [label="/hardware/reset\n[std_srvs/srv/Trigger]", shape=diamond, style=filled, fillcolor=lightyellow];
 
   // Internal Topic Edges
-  "/hardware/robot_state_publisher" -> "/hardware/robot_description" [label="pub"];
+  "/hardware/robot_state_publisher" -> "/hardware/robot_description" [label="publishes"];
 
   // External Topic Edges
-  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="pub INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="subbed by INCOMPATIBLE_QOS", color=orange, style=bold];
-  "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="subbed by"];
+  "/hardware/cartpole_simulator" -> "/hardware/joint_states" [label="publishes INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/hardware/joint_states" -> "/hardware/robot_state_publisher" [label="subscribed by INCOMPATIBLE_QOS", color=orange, style=bold];
+  "/hardware/request/force" -> "/hardware/cartpole_simulator" [label="subscribed by"];
 
   // External Service Edges
   "/hardware/reset" -> "/hardware/cartpole_simulator" [label="provided by", style=dashed];

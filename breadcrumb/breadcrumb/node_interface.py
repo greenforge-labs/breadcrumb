@@ -110,10 +110,20 @@ class NodeInterface:
     parameters: dict[str, ParameterDefinition] = field(default_factory=dict)
 
 
+_PARAM_SUB_PATTERN = re.compile(r"\$\{param:\s*([^}]+?)\s*\}")
+
+
 def _is_param_reference(value: Any) -> bool:
     """Check if a value is a parameter reference like ${param:name}."""
     if isinstance(value, str):
         return bool(re.match(r"^\$\{param:[^}]+\}$", value))
+    return False
+
+
+def _contains_param_reference(value: Any) -> bool:
+    """Check if a value contains any ${param:name} reference (partial or full)."""
+    if isinstance(value, str):
+        return bool(_PARAM_SUB_PATTERN.search(value))
     return False
 
 

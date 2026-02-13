@@ -15,6 +15,7 @@ digraph ROS2Group_control {
 
   // External Topics
   "/hardware/joint_states" [label="/hardware/joint_states\n[sensor_msgs/msg/JointState]", shape=ellipse, style=filled, fillcolor=lightgreen];
+  "/test/test" [label="/test/test\n[std_msgs/msg/String]", shape=ellipse, style=filled, fillcolor=lightgreen];
   "/hardware/request/force" [label="/hardware/request/force\n[std_msgs/msg/Float64]", shape=ellipse, style=filled, fillcolor=lightgreen];
 
   // External Services
@@ -24,8 +25,9 @@ digraph ROS2Group_control {
   "/control/track_position" [label="/control/track_position\n[breadcrumb_example_interfaces/action/TrackPosition]", shape=hexagon, style=filled, fillcolor=lightcoral];
 
   // External Topic Edges
-  "/hardware/joint_states" -> "/control/cartpole_controller" [label="subbed by"];
-  "/control/cartpole_controller" -> "/hardware/request/force" [label="pub"];
+  "/hardware/joint_states" -> "/control/cartpole_controller" [label="subscribed by"];
+  "/control/cartpole_controller" -> "/test/test" [label="publishes"];
+  "/control/cartpole_controller" -> "/hardware/request/force" [label="publishes"];
 
   // External Service Edges
   "/control/enable" -> "/control/cartpole_controller" [label="provided by", style=dashed];
