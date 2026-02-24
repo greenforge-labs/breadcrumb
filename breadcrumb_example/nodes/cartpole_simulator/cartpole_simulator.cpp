@@ -7,35 +7,35 @@
 namespace breadcrumb_example::cartpole_simulator {
 
 // Force subscriber callback
-void force_callback(std::shared_ptr<Context> ctx, std_msgs::msg::Float64::ConstSharedPtr msg) {
-    ctx->applied_force = msg->data;
+void force_callback(std::shared_ptr<Session> sn, std_msgs::msg::Float64::ConstSharedPtr msg) {
+    sn->applied_force = msg->data;
 }
 
 // Reset service handler
 void reset_handler(
-    std::shared_ptr<Context> ctx,
+    std::shared_ptr<Session> sn,
     const std_srvs::srv::Trigger::Request::SharedPtr,
     std_srvs::srv::Trigger::Response::SharedPtr response
 ) {
-    ctx->reset_state();
+    sn->reset_state();
     response->success = true;
     response->message = "Cartpole reset to initial conditions";
-    RCLCPP_INFO(ctx->node->get_logger(), "Cartpole reset");
+    RCLCPP_INFO(sn->node.get_logger(), "Cartpole reset");
 }
 
 // Physics simulation using classic cartpole equations
-void update_physics(std::shared_ptr<Context> ctx) {
-    const double &F = ctx->applied_force;
-    const double &x_dot = ctx->cart_velocity;
-    const double &theta = ctx->pole_angle;
-    const double &theta_dot = ctx->pole_angular_velocity;
+void update_physics(std::shared_ptr<Session> sn) {
+    const double &F = sn->applied_force;
+    const double &x_dot = sn->cart_velocity;
+    const double &theta = sn->pole_angle;
+    const double &theta_dot = sn->pole_angular_velocity;
 
-    const double mc = Context::CART_MASS;
-    const double mp = Context::POLE_MASS;
-    const double L = Context::POLE_LENGTH / 2.0; // Half-length to center of mass
-    const double g = Context::GRAVITY;
-    const double b = Context::FRICTION;
-    const double dt = Context::DT;
+    const double mc = Session::CART_MASS;
+    const double mp = Session::POLE_MASS;
+    const double L = Session::POLE_LENGTH / 2.0; // Half-length to center of mass
+    const double g = Session::GRAVITY;
+    const double b = Session::FRICTION;
+    const double dt = Session::DT;
 
     // Compute total mass and pole mass times length
     const double total_mass = mc + mp;
@@ -55,51 +55,53 @@ void update_physics(std::shared_ptr<Context> ctx) {
     const double x_ddot = temp - pole_mass_length * theta_ddot * cos_theta / total_mass;
 
     // Euler integration
-    ctx->cart_velocity += x_ddot * dt;
-    ctx->cart_position += ctx->cart_velocity * dt;
-    ctx->pole_angular_velocity += theta_ddot * dt;
-    ctx->pole_angle += ctx->pole_angular_velocity * dt;
+    sn->cart_velocity += x_ddot * dt;
+    sn->cart_position += sn->cart_velocity * dt;
+    sn->pole_angular_velocity += theta_ddot * dt;
+    sn->pole_angle += sn->pole_angular_velocity * dt;
 
     // Normalize pole angle to [-pi, pi]
-    while (ctx->pole_angle > M_PI)
-        ctx->pole_angle -= 2.0 * M_PI;
-    while (ctx->pole_angle < -M_PI)
-        ctx->pole_angle += 2.0 * M_PI;
+    while (sn->pole_angle > M_PI)
+        sn->pole_angle -= 2.0 * M_PI;
+    while (sn->pole_angle < -M_PI)
+        sn->pole_angle += 2.0 * M_PI;
 }
 
 // Publish joint states
-void publish_state(std::shared_ptr<Context> ctx) {
+void publish_state(std::shared_ptr<Session> sn) {
     auto msg = sensor_msgs::msg::JointState();
-    msg.header.stamp = ctx->node->now();
+    msg.header.stamp = sn->node.now();
 
     msg.name = {"cart_to_world", "pole_to_cart"};
-    msg.position = {ctx->cart_position, ctx->pole_angle};
-    msg.velocity = {ctx->cart_velocity, ctx->pole_angular_velocity};
+    msg.position = {sn->cart_position, sn->pole_angle};
+    msg.velocity = {sn->cart_velocity, sn->pole_angular_velocity};
 
-    ctx->publishers.joint_states->publish(msg);
+    sn->publishers.joint_states->publish(msg);
 }
 
 // Timer callback for simulation loop
-void simulation_timer_callback(std::shared_ptr<Context> ctx) {
-    update_physics(ctx);
-    publish_state(ctx);
+void simulation_timer_callback(std::shared_ptr<Session> sn) {
+    update_physics(sn);
+    publish_state(sn);
 }
 
-void init(std::shared_ptr<Context> ctx) {
+CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     // Set up force subscriber
-    ctx->subscribers.requested_force->set_callback(force_callback);
+    sn->subscribers.requested_force->set_callback(force_callback);
 
     // Set up reset service
-    ctx->services.reset->set_request_handler(reset_handler);
+    sn->services.reset->set_request_handler(reset_handler);
 
     // Create simulation timer (50 Hz)
-    cake::create_timer(ctx, std::chrono::milliseconds(20), simulation_timer_callback);
+    cake::create_timer(sn, std::chrono::milliseconds(20), simulation_timer_callback);
 
-    RCLCPP_INFO(ctx->node->get_logger(), "Cartpole simulator initialized");
-    RCLCPP_INFO(ctx->node->get_logger(), "  Cart mass: %.2f kg", Context::CART_MASS);
-    RCLCPP_INFO(ctx->node->get_logger(), "  Pole mass: %.2f kg", Context::POLE_MASS);
-    RCLCPP_INFO(ctx->node->get_logger(), "  Pole length: %.2f m", Context::POLE_LENGTH);
-    RCLCPP_INFO(ctx->node->get_logger(), "  Simulation rate: %.1f Hz", 1.0 / Context::DT);
+    RCLCPP_INFO(sn->node.get_logger(), "Cartpole simulator initialized");
+    RCLCPP_INFO(sn->node.get_logger(), "  Cart mass: %.2f kg", Session::CART_MASS);
+    RCLCPP_INFO(sn->node.get_logger(), "  Pole mass: %.2f kg", Session::POLE_MASS);
+    RCLCPP_INFO(sn->node.get_logger(), "  Pole length: %.2f m", Session::POLE_LENGTH);
+    RCLCPP_INFO(sn->node.get_logger(), "  Simulation rate: %.1f Hz", 1.0 / Session::DT);
+
+    return CallbackReturn::SUCCESS;
 }
 
 } // namespace breadcrumb_example::cartpole_simulator

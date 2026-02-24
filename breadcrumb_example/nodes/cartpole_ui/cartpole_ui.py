@@ -5,12 +5,13 @@ from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from queue import Queue
+import threading
 from threading import Lock
 import time
 
 from ament_index_python.packages import get_package_share_directory
-from breadcrumb_example.cartpole_ui.interface import CartpoleUiContext, run
-from cake import create_thread
+from breadcrumb_example.cartpole_ui.interface import CartpoleUiSession, run
+from cake import TransitionCallbackReturn
 from flask import Flask, Response, jsonify, render_template, request
 from rclpy.parameter import Parameter
 from werkzeug.serving import run_simple
@@ -26,8 +27,8 @@ from breadcrumb_example_interfaces.action import TrackPosition
 
 
 @dataclass
-class Context(CartpoleUiContext):
-    """Extended context with web UI state."""
+class Session(CartpoleUiSession):
+    """Extended session with web UI state."""
 
     # Current cartpole state
     cart_position: float = 0.0
@@ -53,30 +54,30 @@ class Context(CartpoleUiContext):
     web_update_rate: float = 0.05  # 20 Hz max (50ms between updates)
 
 
-def push_web_update(ctx: Context):
+def push_web_update(sn: Session):
     """Push current state to all SSE web clients, with rate limiting."""
     current_time = time.time()
 
-    with ctx.state_lock:
-        if current_time - ctx.last_web_update_time < ctx.web_update_rate:
+    with sn.state_lock:
+        if current_time - sn.last_web_update_time < sn.web_update_rate:
             return
-        ctx.last_web_update_time = current_time
+        sn.last_web_update_time = current_time
 
-    if not ctx.web_clients:
+    if not sn.web_clients:
         return
 
     state_data = {
-        "cart_position": ctx.cart_position,
-        "cart_velocity": ctx.cart_velocity,
-        "pole_angle": ctx.pole_angle,
-        "pole_angular_velocity": ctx.pole_angular_velocity,
-        "timestamp": ctx.last_update_time,
-        "tracking": ctx.tracking_goal,
-        "controller_status": ctx.controller_status,
+        "cart_position": sn.cart_position,
+        "cart_velocity": sn.cart_velocity,
+        "pole_angle": sn.pole_angle,
+        "pole_angular_velocity": sn.pole_angular_velocity,
+        "timestamp": sn.last_update_time,
+        "tracking": sn.tracking_goal,
+        "controller_status": sn.controller_status,
     }
 
     disconnected_clients = []
-    for client_queue in ctx.web_clients:
+    for client_queue in sn.web_clients:
         try:
             if client_queue.full():
                 try:
@@ -88,33 +89,33 @@ def push_web_update(ctx: Context):
             disconnected_clients.append(client_queue)
 
     for client in disconnected_clients:
-        if client in ctx.web_clients:
-            ctx.web_clients.remove(client)
+        if client in sn.web_clients:
+            sn.web_clients.remove(client)
 
 
-def joint_states_callback(ctx: Context, msg: JointState):
+def joint_states_callback(sn: Session, msg: JointState):
     """Callback for joint_states updates."""
     current_time = time.time()
 
-    with ctx.state_lock:
+    with sn.state_lock:
         if len(msg.position) >= 2 and len(msg.velocity) >= 2:
-            ctx.cart_position = msg.position[0]
-            ctx.pole_angle = msg.position[1]
-            ctx.cart_velocity = msg.velocity[0]
-            ctx.pole_angular_velocity = msg.velocity[1]
-            ctx.last_update_time = current_time
+            sn.cart_position = msg.position[0]
+            sn.pole_angle = msg.position[1]
+            sn.cart_velocity = msg.velocity[0]
+            sn.pole_angular_velocity = msg.velocity[1]
+            sn.last_update_time = current_time
 
-    push_web_update(ctx)
+    push_web_update(sn)
 
 
-def controller_status_callback(ctx: Context, msg: String):
+def controller_status_callback(sn: Session, msg: String):
     """Callback for controller status updates."""
-    ctx.controller_status = msg.data
-    push_web_update(ctx)
+    sn.controller_status = msg.data
+    push_web_update(sn)
 
 
-def create_app(ctx: Context) -> Flask:
-    """Create Flask app with routes as closures over context."""
+def create_app(sn: Session) -> Flask:
+    """Create Flask app with routes as closures over session."""
     app = Flask(
         __name__,
         template_folder=Path(get_package_share_directory("breadcrumb_example")) / "web_templates",
@@ -123,7 +124,7 @@ def create_app(ctx: Context) -> Flask:
     @app.route("/")
     def index():
         """Serve the dashboard HTML."""
-        return render_template("dashboard.html", stop_buttons=list(ctx.publishers.emergency_stops.keys()))
+        return render_template("dashboard.html", stop_buttons=list(sn.publishers.emergency_stops.keys()))
 
     @app.route("/events")
     def sse():
@@ -133,8 +134,8 @@ def create_app(ctx: Context) -> Flask:
             from queue import Empty
 
             q = Queue(maxsize=5)  # Smaller queue to prevent memory buildup
-            ctx.web_clients.append(q)
-            ctx.logger.info(f"SSE client connected. Total clients: {len(ctx.web_clients)}")
+            sn.web_clients.append(q)
+            sn.logger.info(f"SSE client connected. Total clients: {len(sn.web_clients)}")
 
             try:
                 while True:
@@ -147,9 +148,9 @@ def create_app(ctx: Context) -> Flask:
                         yield ": keepalive\n\n"
             finally:
                 # Clean up this client's queue (always runs on disconnect)
-                if q in ctx.web_clients:
-                    ctx.web_clients.remove(q)
-                ctx.logger.info(f"SSE client disconnected. Total clients: {len(ctx.web_clients)}")
+                if q in sn.web_clients:
+                    sn.web_clients.remove(q)
+                sn.logger.info(f"SSE client disconnected. Total clients: {len(sn.web_clients)}")
 
         return Response(event_stream(), mimetype="text/event-stream")
 
@@ -164,14 +165,14 @@ def create_app(ctx: Context) -> Flask:
             req = SetBool.Request()
             req.data = enable
 
-            future = ctx.service_clients.enable_controller.call_async(req)
+            future = sn.service_clients.enable_controller.call_async(req)
             # Note: In a production system, you'd wait for the future with a timeout
             # For simplicity, we're fire-and-forget here
 
-            ctx.logger.info(f"Controller {'enabled' if enable else 'disabled'}")
+            sn.logger.info(f"Controller {'enabled' if enable else 'disabled'}")
             return jsonify({"success": True, "enabled": enable})
         except Exception as e:
-            ctx.logger.error(f"Failed to enable/disable controller: {e}")
+            sn.logger.error(f"Failed to enable/disable controller: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/reset", methods=["POST"])
@@ -179,14 +180,14 @@ def create_app(ctx: Context) -> Flask:
         """Reset the simulator."""
         try:
             req = Trigger.Request()
-            future = ctx.service_clients.reset_simulator.call_async(req)
+            future = sn.service_clients.reset_simulator.call_async(req)
             # Note: In a production system, you'd wait for the future with a timeout
             # For simplicity, we're fire-and-forget here
 
-            ctx.logger.info("Simulator reset requested")
+            sn.logger.info("Simulator reset requested")
             return jsonify({"success": True})
         except Exception as e:
-            ctx.logger.error(f"Failed to reset simulator: {e}")
+            sn.logger.error(f"Failed to reset simulator: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/emergency_stop", methods=["POST"])
@@ -196,17 +197,17 @@ def create_app(ctx: Context) -> Flask:
             data = request.get_json()
             source = data.get("source", "")
 
-            if source not in ctx.publishers.emergency_stops:
+            if source not in sn.publishers.emergency_stops:
                 return jsonify({"success": False, "error": f"Unknown stop source: {source}"}), 400
 
             msg = Bool()
             msg.data = True
-            ctx.publishers.emergency_stops[source].publish(msg)
+            sn.publishers.emergency_stops[source].publish(msg)
 
-            ctx.logger.info(f"Emergency stop triggered for source: {source}")
+            sn.logger.info(f"Emergency stop triggered for source: {source}")
             return jsonify({"success": True, "source": source})
         except Exception as e:
-            ctx.logger.error(f"Failed to trigger emergency stop: {e}")
+            sn.logger.error(f"Failed to trigger emergency stop: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/track_position", methods=["POST"])
@@ -223,23 +224,23 @@ def create_app(ctx: Context) -> Flask:
             goal_msg.goal_tolerance = goal_tolerance
 
             # Send goal
-            ctx.tracking_goal = True
-            send_goal_future = ctx.action_clients.track_position.send_goal_async(
+            sn.tracking_goal = True
+            send_goal_future = sn.action_clients.track_position.send_goal_async(
                 goal_msg, feedback_callback=track_position_feedback
             )
             send_goal_future.add_done_callback(track_position_response)
 
-            ctx.logger.info(f"Tracking position goal sent: {target_position}")
+            sn.logger.info(f"Tracking position goal sent: {target_position}")
             return jsonify({"success": True, "target": target_position})
         except Exception as e:
-            ctx.logger.error(f"Failed to send tracking goal: {e}")
-            ctx.tracking_goal = False
+            sn.logger.error(f"Failed to send tracking goal: {e}")
+            sn.tracking_goal = False
             return jsonify({"success": False, "error": str(e)}), 500
 
     def track_position_feedback(feedback_msg):
         """Handle action feedback."""
         feedback = feedback_msg.feedback
-        ctx.logger.info(
+        sn.logger.info(
             f"Position tracking feedback: current={feedback.current_position:.3f}, "
             f"distance={feedback.distance_to_goal:.3f}"
         )
@@ -248,19 +249,19 @@ def create_app(ctx: Context) -> Flask:
         """Handle action goal response."""
         goal_handle = future.result()
         if not goal_handle.accepted:
-            ctx.logger.warn("Position tracking goal rejected")
-            ctx.tracking_goal = False
+            sn.logger.warn("Position tracking goal rejected")
+            sn.tracking_goal = False
             return
 
-        ctx.logger.info("Position tracking goal accepted")
+        sn.logger.info("Position tracking goal accepted")
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(track_position_result)
 
     def track_position_result(future):
         """Handle action result."""
         result = future.result().result
-        ctx.tracking_goal = False
-        ctx.logger.info(
+        sn.tracking_goal = False
+        sn.logger.info(
             f"Position tracking complete: success={result.success}, " f"final_position={result.final_position:.3f}"
         )
 
@@ -269,11 +270,11 @@ def create_app(ctx: Context) -> Flask:
         """Get current controller parameters."""
         try:
             # Create parameter client for the controller node
-            param_client = ctx.node.create_client(GetParameters, f"/{ctx.params.controller_node_name}/get_parameters")
+            param_client = sn.node.create_client(GetParameters, f"/{sn.params.controller_node_name}/get_parameters")
 
             # Wait for service to be available
             if not param_client.wait_for_service(timeout_sec=2.0):
-                ctx.logger.error("Parameter service not available")
+                sn.logger.error("Parameter service not available")
                 return jsonify({"success": False, "error": "Service not available"}), 503
 
             # Build GetParameters request
@@ -288,7 +289,7 @@ def create_app(ctx: Context) -> Flask:
             start_time = time.time()
             while not future.done():
                 if time.time() - start_time > timeout:
-                    ctx.logger.error("Parameter get timed out")
+                    sn.logger.error("Parameter get timed out")
                     return jsonify({"success": False, "error": "Request timed out"}), 504
                 time.sleep(0.01)  # Small sleep to avoid busy-waiting
 
@@ -302,12 +303,12 @@ def create_app(ctx: Context) -> Flask:
                     if param_value.type == ParameterType.PARAMETER_DOUBLE:
                         params[name] = param_value.double_value
                     else:
-                        ctx.logger.warn(f"Parameter {name} is not a double")
+                        sn.logger.warn(f"Parameter {name} is not a double")
                         params[name] = 0.0
                 else:
                     params[name] = 0.0
 
-            ctx.logger.info(f"Retrieved parameters: {params}")
+            sn.logger.info(f"Retrieved parameters: {params}")
             return jsonify(
                 {
                     "success": True,
@@ -318,7 +319,7 @@ def create_app(ctx: Context) -> Flask:
                 }
             )
         except Exception as e:
-            ctx.logger.error(f"Failed to get parameters: {e}")
+            sn.logger.error(f"Failed to get parameters: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/set_params", methods=["POST"])
@@ -342,7 +343,7 @@ def create_app(ctx: Context) -> Flask:
                 return jsonify({"success": False, "error": "No parameters provided"}), 400
 
             # Create parameter client for the controller node
-            param_client = ctx.node.create_client(SetParameters, f"/{ctx.params.controller_node_name}/set_parameters")
+            param_client = sn.node.create_client(SetParameters, f"/{sn.params.controller_node_name}/set_parameters")
 
             # Build SetParameters request
             req = SetParameters.Request()
@@ -350,25 +351,25 @@ def create_app(ctx: Context) -> Flask:
 
             # Call service (fire and forget for simplicity)
             future = param_client.call_async(req)
-            ctx.logger.info(f"Parameter update requested: {data}")
+            sn.logger.info(f"Parameter update requested: {data}")
 
             return jsonify({"success": True, "params": data})
         except Exception as e:
-            ctx.logger.error(f"Failed to set parameters: {e}")
+            sn.logger.error(f"Failed to set parameters: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     return app
 
 
-def run_webserver(ctx: Context):
-    """Run Flask webserver in separate thread (tracked by cake)."""
-    ctx.logger.info(f"Starting webserver on port {ctx.params.webserver_port}")
+def run_webserver(sn: Session):
+    """Run Flask webserver in separate thread."""
+    sn.logger.info(f"Starting webserver on port {sn.params.webserver_port}")
 
-    # Create and run app with routes as closures over context
+    # Create and run app with routes as closures over session
     run_simple(
         "0.0.0.0",
-        ctx.params.webserver_port,
-        create_app(ctx),
+        sn.params.webserver_port,
+        create_app(sn),
         threaded=True,
         use_reloader=False,
         use_debugger=False,
@@ -376,17 +377,19 @@ def run_webserver(ctx: Context):
     )
 
 
-def init(ctx: Context):
+def on_configure(sn: Session) -> TransitionCallbackReturn:
     """Initialize the cartpole UI node."""
     # Set up ROS callbacks
-    ctx.subscribers.joint_states.set_callback(joint_states_callback)
-    ctx.subscribers.controller_status.set_callback(controller_status_callback)
+    sn.subscribers.joint_states.set_callback(joint_states_callback)
+    sn.subscribers.controller_status.set_callback(controller_status_callback)
 
-    # Start Flask webserver in separate thread using cake's thread utility
-    create_thread(ctx, run_webserver)
+    # Start Flask webserver in separate daemon thread
+    threading.Thread(target=run_webserver, args=(sn,), daemon=True).start()
 
-    ctx.logger.info(f"CartPole UI initialized. Dashboard available at http://localhost:{ctx.params.webserver_port}")
+    sn.logger.info(f"CartPole UI initialized. Dashboard available at http://localhost:{sn.params.webserver_port}")
+
+    return TransitionCallbackReturn.SUCCESS
 
 
 if __name__ == "__main__":
-    run(Context, init)
+    run(Session, on_configure)

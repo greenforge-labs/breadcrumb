@@ -5,7 +5,9 @@
 
 namespace breadcrumb_example::cartpole_simulator {
 
-struct Context : CartpoleSimulatorContext<Context> {
+struct Session : CartpoleSimulatorSession<Session> {
+    using CartpoleSimulatorSession::CartpoleSimulatorSession;
+
     // Physics state
     double cart_position = 0.0;         // meters
     double cart_velocity = 0.0;         // m/s
@@ -33,9 +35,9 @@ struct Context : CartpoleSimulatorContext<Context> {
     }
 };
 
-void init(std::shared_ptr<Context> ctx);
+CallbackReturn on_configure(std::shared_ptr<Session> sn);
 
 // IMPORTANT - this _must_ match the node name. Cake expects the node to be defined at pkg_name::node_name::NodeName
-using CartpoleSimulator = CartpoleSimulatorBase<Context, init>;
+using CartpoleSimulator = CartpoleSimulatorBase<Session, on_configure>;
 
 } // namespace breadcrumb_example::cartpole_simulator
