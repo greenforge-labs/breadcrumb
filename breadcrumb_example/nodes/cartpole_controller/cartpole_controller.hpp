@@ -5,7 +5,9 @@
 
 namespace breadcrumb_example::cartpole_controller {
 
-struct Context : CartpoleControllerContext<Context> {
+struct Session : CartpoleControllerSession<Session> {
+    using CartpoleControllerSession::CartpoleControllerSession;
+
     // State variables (from joint_states)
     double cart_position = 0.0;
     double cart_velocity = 0.0;
@@ -22,9 +24,9 @@ struct Context : CartpoleControllerContext<Context> {
     double goal_tolerance = 0.0;    // Tolerance for action completion
 };
 
-void init(std::shared_ptr<Context> ctx);
+CallbackReturn on_configure(std::shared_ptr<Session> sn);
 
 // IMPORTANT - this _must_ match the node name. Cake expects the node to be defined at pkg_name::node_name::NodeName
-using CartpoleController = CartpoleControllerBase<Context, init>;
+using CartpoleController = CartpoleControllerBase<Session, on_configure>;
 
 } // namespace breadcrumb_example::cartpole_controller
