@@ -27,6 +27,21 @@ from .node_interface import (
 from typing import Any
 
 
+# Topics that are always hidden (ROS 2 infrastructure noise — every node publishes these)
+_ALWAYS_HIDDEN_TOPICS = frozenset({
+    "/rosout",
+    "/parameter_events",
+})
+
+# Message/service type prefixes that identify system (implicit) interfaces.
+# These are added by jig to every lifecycle node's output manifest.
+_SYSTEM_INTERFACE_TYPE_PREFIXES = (
+    "lifecycle_msgs/",
+    "rcl_interfaces/",
+    "type_description_interfaces/",
+)
+
+
 @dataclass
 class Node:
     """A ROS2 node in the graph."""
@@ -503,6 +518,42 @@ def _is_hidden(name: str) -> bool:
     """
     last_component = name.split("/")[-1]
     return last_component.startswith("_")
+
+
+def _is_system_interface_type(type_str: str) -> bool:
+    """Check if a message/service/action type is a system (implicit) interface."""
+    return type_str.startswith(_SYSTEM_INTERFACE_TYPE_PREFIXES)
+
+
+def filter_system_interfaces(graph: Graph) -> None:
+    """
+    Remove system interfaces from the graph unless they have real connections.
+
+    - Always removes /rosout and /parameter_events topics (infrastructure noise).
+    - Removes other system-type topics unless they have both publishers AND subscribers.
+    - Removes system-type services unless they have both providers AND clients.
+    - Removes system-type actions unless they have both servers AND clients.
+
+    System types are identified by message/service package prefix:
+    lifecycle_msgs/, rcl_interfaces/, type_description_interfaces/.
+
+    Mutates the graph in place.
+    """
+    graph.topics = [
+        t for t in graph.topics
+        if t.name not in _ALWAYS_HIDDEN_TOPICS
+        and not (_is_system_interface_type(t.msg_type) and not (t.publishers and t.subscribers))
+    ]
+
+    graph.services = [
+        s for s in graph.services
+        if not (_is_system_interface_type(s.srv_type) and not (s.providers and s.clients))
+    ]
+
+    graph.actions = [
+        a for a in graph.actions
+        if not (_is_system_interface_type(a.action_type) and not (a.servers and a.clients))
+    ]
 
 
 def build_graph(

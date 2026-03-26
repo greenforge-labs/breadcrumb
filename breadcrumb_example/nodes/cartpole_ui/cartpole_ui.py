@@ -11,7 +11,7 @@ import time
 
 from ament_index_python.packages import get_package_share_directory
 from breadcrumb_example.cartpole_ui.interface import CartpoleUiSession, run
-from cake import TransitionCallbackReturn
+from jig import TransitionCallbackReturn
 from flask import Flask, Response, jsonify, render_template, request
 from rclpy.parameter import Parameter
 from werkzeug.serving import run_simple

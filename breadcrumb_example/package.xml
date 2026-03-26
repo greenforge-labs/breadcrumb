@@ -3,13 +3,13 @@
 <package format="3">
   <name>breadcrumb_example</name>
   <version>0.0.0</version>
-  <description>Example package demonstrating cake, clingwrap, and breadcrumb integration</description>
+  <description>Example package demonstrating jig, clingwrap, and breadcrumb integration</description>
   <maintainer email="info@greenforgelabs.com.au">Alistair English</maintainer>
   <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>cake</depend>
+  <depend>jig</depend>
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
   <depend>clingwrap</depend>

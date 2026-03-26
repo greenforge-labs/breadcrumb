@@ -26,7 +26,7 @@ struct Session : CartpoleControllerSession<Session> {
 
 CallbackReturn on_configure(std::shared_ptr<Session> sn);
 
-// IMPORTANT - this _must_ match the node name. Cake expects the node to be defined at pkg_name::node_name::NodeName
+// IMPORTANT - this _must_ match the node name. Jig expects the node to be defined at pkg_name::node_name::NodeName
 using CartpoleController = CartpoleControllerBase<Session, on_configure>;
 
 } // namespace breadcrumb_example::cartpole_controller

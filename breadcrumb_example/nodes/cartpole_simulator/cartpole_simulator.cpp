@@ -1,5 +1,5 @@
 #include "cartpole_simulator.hpp"
-#include <cake/timer.hpp>
+#include <jig/timer.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -93,7 +93,7 @@ CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     sn->services.reset->set_request_handler(reset_handler);
 
     // Create simulation timer (50 Hz)
-    cake::create_timer(sn, std::chrono::milliseconds(20), simulation_timer_callback);
+    jig::create_timer(sn, std::chrono::milliseconds(20), simulation_timer_callback);
 
     RCLCPP_INFO(sn->node.get_logger(), "Cartpole simulator initialized");
     RCLCPP_INFO(sn->node.get_logger(), "  Cart mass: %.2f kg", Session::CART_MASS);

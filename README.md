@@ -1,10 +1,10 @@
 # breadcrumb
 
-A ROS2 graph static analysis tool that works with cake and clingwrap.
+A ROS2 graph static analysis tool that works with jig and clingwrap.
 
 ## Overview
 
-**breadcrumb** analyzes ROS2 launch files without running your system, extracting and visualizing the complete communication graph of nodes, topics, services, and actions. It's built on top of the [clingwrap](https://github.com/greenforge-labs/clingwrap) static analysis system and [cake](https://github.com/greenforge-labs/cake) node interface definition file format.
+**breadcrumb** analyzes ROS2 launch files without running your system, extracting and visualizing the complete communication graph of nodes, topics, services, and actions. It's built on top of the [clingwrap](https://github.com/greenforge-labs/clingwrap) static analysis system and [jig](https://github.com/nineyards-robotics/jig) node interface definition file format.
 
 ![breadcrumb example graph visualisation](./breadcrumb_example/ros_graphs/graph_full_system.svg)
 *An example graph visualisation (see [breadcrumb_example](./breadcrumb_example/README.md))*
@@ -19,7 +19,7 @@ A ROS2 graph static analysis tool that works with cake and clingwrap.
 
 ### Prerequisites
 - Launch files written using the [clingwrap](https://github.com/greenforge-labs/clingwrap) package
-- Node interfaces defined using the [cake](https://github.com/greenforge-labs/cake) `interface.yaml` format (Note: nodes don't actually have to be written using cake - see [Packages Not Using Cake](#packages-not-using-cake))
+- Node interfaces defined using the [jig](https://github.com/nineyards-robotics/jig) `interface.yaml` format (Note: nodes don't actually have to be written using jig - see [Packages Not Using Jig](#packages-not-using-jig))
 
 ## Usage
 
@@ -47,7 +47,7 @@ breadcrumb my_robot.launch.py --include-hidden
 
 Want to see breadcrumb in action? Check out [breadcrumb_example](./breadcrumb_example/README.md), a complete ROS2 cartpole control system that demonstrates:
 
-- How cake, clingwrap, and breadcrumb work together
+- How jig, clingwrap, and breadcrumb work together
 - Mixed C++ and Python nodes with automatic code generation
 - Modular launch file architecture with namespace organization
 - Static graph analysis and visualization of the complete system
@@ -74,9 +74,9 @@ When you run breadcrumb, it performs the following steps:
 
 4. **Output**: The final graph can be exported as JSON for programmatic analysis or rendered as GraphViz DOT diagrams for visualization.
 
-## Cake Integration
+## Jig Integration
 
-When you build a package with cake, the build system automatically generates `interface.yaml` files from your node definitions and installs them to `share/<package>/interfaces/`. This happens during the `colcon build` process via CMake install rules that cake sets up. Even if you're not using cake to write your nodes, you can manually create and install these interface files to make your nodes compatible with breadcrumb ([Packages Not Using Cake](#packages-not-using-cake)).
+When you build a package with jig, the build system automatically generates `interface.yaml` files from your node definitions and installs them to `share/<package>/interfaces/`. This happens during the `colcon build` process via CMake install rules that jig sets up. Even if you're not using jig to write your nodes, you can manually create and install these interface files to make your nodes compatible with breadcrumb ([Packages Not Using Jig](#packages-not-using-jig)).
 
 ## Graph Visualization
 
@@ -291,9 +291,9 @@ Breadcrumb automatically checks QoS compatibility between publishers and subscri
 
 **In DOT output**: Incompatible connections are shown with orange, bold edges.
 
-## Packages Not Using Cake
+## Packages Not Using Jig
 
-You don't necessarily need to use cake to make your nodes compatible with breadcrumb. You can manually create and install interface definitions for any node. Of course, ensuring these interfaces stay up to date is tedious - one of the reasons why the cake code auto-generation was created.
+You don't necessarily need to use jig to make your nodes compatible with breadcrumb. You can manually create and install interface definitions for any node. Of course, ensuring these interfaces stay up to date is tedious - one of the reasons why the jig code auto-generation was created.
 
 ### Creating Manual Interface Definitions
 

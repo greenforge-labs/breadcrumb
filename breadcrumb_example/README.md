@@ -1,6 +1,6 @@
 # breadcrumb_example
 
-A complete ROS2 cartpole (inverted pendulum) control system demonstrating the integration of [cake](https://github.com/greenforge-labs/cake), [clingwrap](https://github.com/greenforge-labs/clingwrap), and [breadcrumb](../) for building, launching, and visualizing ROS2 applications.
+A complete ROS2 cartpole (inverted pendulum) control system demonstrating the integration of [jig](https://github.com/nineyards-robotics/jig), [clingwrap](https://github.com/greenforge-labs/clingwrap), and [breadcrumb](../) for building, launching, and visualizing ROS2 applications.
 
 ![Demo](./demo.gif)
 
@@ -10,7 +10,7 @@ A complete ROS2 cartpole (inverted pendulum) control system demonstrating the in
 
 This example implements a simulated cart-pole system with a full state feedback controller and a real-time web dashboard. It demonstrates:
 
-- **cake**: Declarative node interface definitions with automatic code generation (C++ and Python)
+- **jig**: Declarative node interface definitions with automatic code generation (C++ and Python)
 - **clingwrap**: Clean, modular launch file architecture with namespace management
 - **breadcrumb**: Static graph analysis and visualization of the complete system
 
@@ -23,7 +23,7 @@ The system consists of three nodes working together:
 
 ### Prerequisites
 
-Currently cake, clingwrap and breadcrumb are not published as apt packages, so you will need to clone all three into a workspace and build them.
+Currently jig, clingwrap and breadcrumb are not published as apt packages, so you will need to clone all three into a workspace and build them.
 
 ### Launch
 
@@ -134,11 +134,11 @@ The entire package is built with just 5 lines of CMake:
 cmake_minimum_required(VERSION 3.22)
 project(breadcrumb_example)
 
-find_package(cake REQUIRED)
-cake_auto_package(INSTALL_TO_SHARE urdf rviz web_templates)
+find_package(jig REQUIRED)
+jig_auto_package(INSTALL_TO_SHARE urdf rviz web_templates)
 ```
 
-The `cake_auto_package()` macro automatically:
+The `jig_auto_package()` macro automatically:
 - Discovers all nodes in `nodes/`
 - Generates C++ and Python interface code from `interface.yaml` files
 - Builds libraries and executables
@@ -146,7 +146,7 @@ The `cake_auto_package()` macro automatically:
 - Installs everything to the correct locations
 - Exports interface definitions for breadcrumb
 
-### Node Structure with cake
+### Node Structure with jig
 
 Each node directory contains:
 - `interface.yaml` - Declarative interface definition (topics, services, actions, parameters)
@@ -177,7 +177,7 @@ Key features demonstrated:
 
 ### breadcrumb Integration
 
-When you build with cake, `interface.yaml` files are automatically installed to:
+When you build with jig, `interface.yaml` files are automatically installed to:
 ```
 install/breadcrumb_example/share/breadcrumb_example/interfaces/
 ```
@@ -188,7 +188,7 @@ breadcrumb finds these files and uses them to build the complete system graph wi
 
 This example showcases:
 
-### cake Features
+### jig Features
 - ✓ Automatic code generation from `interface.yaml`
 - ✓ Mixed C++ and Python nodes in one package
 - ✓ Composable component registration (C++ nodes)
@@ -248,7 +248,7 @@ Want to experiment? Try:
 
 ## Learn More
 
-- [cake README](https://github.com/greenforge-labs/cake/blob/main/README.md) - Declarative code generation
+- [jig README](https://github.com/nineyards-robotics/jig/blob/main/README.md) - Declarative code generation
 - [clingwrap README](https://github.com/greenforge-labs/clingwrap/blob/main/README.md) - Launch file wrapper
 - [breadcrumb README](../README.md) - Static graph analysis
 

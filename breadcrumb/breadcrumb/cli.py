@@ -8,7 +8,7 @@ import warnings
 import click
 from clingwrap.static_info import ComposableNodeInfo, NodeInfo, StaticInformation
 
-from .graph import build_graph
+from .graph import build_graph, filter_system_interfaces
 from .helpers import (
     LaunchFileSource,
     combine_namespaces,
@@ -40,12 +40,18 @@ from .serialization import serialize_graph, serialize_to_dot, serialize_to_group
     help="Include entities whose names start with underscore (hidden by default)",
 )
 @click.option(
+    "--include-system-interfaces",
+    is_flag=True,
+    default=False,
+    help="Include system interfaces (lifecycle services, parameter services, /rosout, etc.) even when unconnected",
+)
+@click.option(
     "--graph-type",
     type=click.Choice(["full_system", "grouped_by_namespace", "grouped_and_full_system"]),
     default="full_system",
     help="Type of graph to generate (only for .dot output)",
 )
-def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bool, graph_type: str):
+def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bool, include_system_interfaces: bool, graph_type: str):
     """Static analysis tool for ROS 2 node graphs.
 
     Analyzes one or more clingwrap launch files and displays the discovered
@@ -131,6 +137,9 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
 
     # Build the denormalized graph
     graph = build_graph(all_nodes, include_hidden=include_hidden)
+
+    if not include_system_interfaces:
+        filter_system_interfaces(graph)
 
     # Collect QoS compatibility warnings
     qos_warnings = []

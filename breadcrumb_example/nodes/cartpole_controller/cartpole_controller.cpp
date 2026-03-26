@@ -1,6 +1,6 @@
 #include "cartpole_controller.hpp"
 #include <breadcrumb_example_interfaces/action/track_position.hpp>
-#include <cake/timer.hpp>
+#include <jig/timer.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
@@ -161,7 +161,7 @@ CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     sn->services.enable->set_request_handler(enable_handler);
 
     // Set up position tracking action server options
-    cake::SingleGoalActionServerOptions<breadcrumb_example_interfaces::action::TrackPosition> action_options;
+    jig::SingleGoalActionServerOptions<breadcrumb_example_interfaces::action::TrackPosition> action_options;
     action_options.new_goals_replace_current_goal = true; // Allow updating the setpoint
     sn->actions.track_position->set_options(action_options);
 
@@ -171,7 +171,7 @@ CallbackReturn on_configure(std::shared_ptr<Session> sn) {
     }
 
     // Create control timer (50 Hz to match simulator)
-    cake::create_timer(sn, std::chrono::milliseconds(20), control_timer_callback);
+    jig::create_timer(sn, std::chrono::milliseconds(20), control_timer_callback);
 
     RCLCPP_INFO(sn->node.get_logger(), "State Feedback Cartpole Controller initialized");
     print_gains(sn);

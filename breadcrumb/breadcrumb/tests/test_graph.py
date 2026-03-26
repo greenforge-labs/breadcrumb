@@ -1,10 +1,20 @@
-"""Tests for resolve_name_params() and expand_for_each_param() in breadcrumb.graph."""
+"""Tests for resolve_name_params(), expand_for_each_param(), and filter_system_interfaces() in breadcrumb.graph."""
 
 import warnings
 
 import pytest
 
-from breadcrumb.graph import expand_for_each_param, resolve_name_params
+from breadcrumb.graph import (
+    Action,
+    Graph,
+    Node,
+    Service,
+    Topic,
+    TopicConnection,
+    expand_for_each_param,
+    filter_system_interfaces,
+    resolve_name_params,
+)
 from breadcrumb.node_interface import ParameterDefinition
 
 
@@ -246,3 +256,215 @@ class TestExpandForEachParam:
             {},
         )
         assert result == ["/topic/a/out", "/topic/b/out"]
+
+
+def _make_node(name: str) -> Node:
+    return Node(fqn=f"/{name}", name=name, namespace=None, package="test_pkg")
+
+
+class TestFilterSystemInterfaces:
+    """Tests for filter_system_interfaces()."""
+
+    def test_always_hides_rosout(self):
+        """The /rosout topic is always removed, even with subscribers."""
+        node_a = _make_node("a")
+        node_b = _make_node("b")
+        graph = Graph(
+            nodes=[node_a, node_b],
+            topics=[
+                Topic(
+                    name="/rosout",
+                    msg_type="rcl_interfaces/msg/Log",
+                    publishers=[TopicConnection(node=node_a)],
+                    subscribers=[TopicConnection(node=node_b)],
+                ),
+                Topic(name="/cmd_vel", msg_type="geometry_msgs/msg/Twist"),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert [t.name for t in graph.topics] == ["/cmd_vel"]
+
+    def test_always_hides_parameter_events(self):
+        """The /parameter_events topic is always removed."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/parameter_events",
+                    msg_type="rcl_interfaces/msg/ParameterEvent",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert graph.topics == []
+
+    def test_hides_unconnected_lifecycle_topic(self):
+        """Lifecycle topics with only publishers (no subscribers) are removed."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/a/transition_event",
+                    msg_type="lifecycle_msgs/msg/TransitionEvent",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert graph.topics == []
+
+    def test_keeps_connected_lifecycle_topic(self):
+        """Lifecycle topics with both publishers and subscribers are kept."""
+        node_a = _make_node("a")
+        node_monitor = _make_node("monitor")
+        graph = Graph(
+            nodes=[node_a, node_monitor],
+            topics=[
+                Topic(
+                    name="/a/transition_event",
+                    msg_type="lifecycle_msgs/msg/TransitionEvent",
+                    publishers=[TopicConnection(node=node_a)],
+                    subscribers=[TopicConnection(node=node_monitor)],
+                ),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert len(graph.topics) == 1
+        assert graph.topics[0].name == "/a/transition_event"
+
+    def test_hides_unconnected_lifecycle_service(self):
+        """Lifecycle services with only a provider (no clients) are removed."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            services=[
+                Service(name="/a/change_state", srv_type="lifecycle_msgs/srv/ChangeState", providers=[node_a]),
+                Service(name="/a/get_state", srv_type="lifecycle_msgs/srv/GetState", providers=[node_a]),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert graph.services == []
+
+    def test_keeps_connected_lifecycle_service(self):
+        """Lifecycle services with both provider and client are kept."""
+        node_a = _make_node("a")
+        node_manager = _make_node("lifecycle_manager")
+        graph = Graph(
+            nodes=[node_a, node_manager],
+            services=[
+                Service(
+                    name="/a/change_state",
+                    srv_type="lifecycle_msgs/srv/ChangeState",
+                    providers=[node_a],
+                    clients=[node_manager],
+                ),
+                Service(name="/a/get_state", srv_type="lifecycle_msgs/srv/GetState", providers=[node_a]),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert len(graph.services) == 1
+        assert graph.services[0].name == "/a/change_state"
+
+    def test_hides_unconnected_parameter_service(self):
+        """Parameter services with only a provider are removed."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            services=[
+                Service(
+                    name="/a/describe_parameters",
+                    srv_type="rcl_interfaces/srv/DescribeParameters",
+                    providers=[node_a],
+                ),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert graph.services == []
+
+    def test_preserves_user_topics(self):
+        """Non-system topics are never filtered."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/cmd_vel",
+                    msg_type="geometry_msgs/msg/Twist",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert len(graph.topics) == 1
+
+    def test_preserves_user_services(self):
+        """Non-system services are never filtered."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            services=[
+                Service(name="/a/reset", srv_type="std_srvs/srv/Trigger", providers=[node_a]),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert len(graph.services) == 1
+
+    def test_mixed_graph(self):
+        """Filtering works correctly on a graph with both system and user interfaces."""
+        node_a = _make_node("a")
+        node_b = _make_node("b")
+        node_manager = _make_node("lifecycle_manager")
+        graph = Graph(
+            nodes=[node_a, node_b, node_manager],
+            topics=[
+                # User topic — kept
+                Topic(
+                    name="/cmd_vel",
+                    msg_type="geometry_msgs/msg/Twist",
+                    publishers=[TopicConnection(node=node_a)],
+                    subscribers=[TopicConnection(node=node_b)],
+                ),
+                # Always hidden
+                Topic(
+                    name="/rosout",
+                    msg_type="rcl_interfaces/msg/Log",
+                    publishers=[TopicConnection(node=node_a), TopicConnection(node=node_b)],
+                ),
+                # Unconnected system topic — hidden
+                Topic(
+                    name="/a/transition_event",
+                    msg_type="lifecycle_msgs/msg/TransitionEvent",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+                # Connected system topic — kept
+                Topic(
+                    name="/b/transition_event",
+                    msg_type="lifecycle_msgs/msg/TransitionEvent",
+                    publishers=[TopicConnection(node=node_b)],
+                    subscribers=[TopicConnection(node=node_manager)],
+                ),
+            ],
+            services=[
+                # User service — kept
+                Service(name="/a/reset", srv_type="std_srvs/srv/Trigger", providers=[node_a]),
+                # Connected system service — kept
+                Service(
+                    name="/a/change_state",
+                    srv_type="lifecycle_msgs/srv/ChangeState",
+                    providers=[node_a],
+                    clients=[node_manager],
+                ),
+                # Unconnected system service — hidden
+                Service(
+                    name="/a/get_state",
+                    srv_type="lifecycle_msgs/srv/GetState",
+                    providers=[node_a],
+                ),
+            ],
+        )
+        filter_system_interfaces(graph)
+        assert [t.name for t in graph.topics] == ["/cmd_vel", "/b/transition_event"]
+        assert [s.name for s in graph.services] == ["/a/reset", "/a/change_state"]
