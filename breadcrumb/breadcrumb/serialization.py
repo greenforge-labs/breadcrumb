@@ -438,6 +438,7 @@ def serialize_to_dot(graph: Graph) -> str:
             lines.append(f"  {_action_call_edge(client_id, act_id)}")
 
     lines.append("}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -791,6 +792,7 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
                 lines.append(f"  {_action_call_edge(node_id, act_id)}")
 
     lines.append("}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1023,6 +1025,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         lines.append("")
 
     lines.append("}")
+    lines.append("")
     return "\n".join(lines)
 
 
