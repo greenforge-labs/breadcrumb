@@ -1,4 +1,4 @@
-"""Tests for resolve_name_params(), expand_for_each_param(), and filter_system_interfaces() in breadcrumb.graph."""
+"""Tests for resolve_name_params(), expand_for_each_param(), filter_system_interfaces(), and extract_tf_roles() in breadcrumb.graph."""
 
 import warnings
 
@@ -12,6 +12,7 @@ from breadcrumb.graph import (
     Topic,
     TopicConnection,
     expand_for_each_param,
+    extract_tf_roles,
     filter_system_interfaces,
     resolve_name_params,
 )
@@ -468,3 +469,183 @@ class TestFilterSystemInterfaces:
         filter_system_interfaces(graph)
         assert [t.name for t in graph.topics] == ["/cmd_vel", "/b/transition_event"]
         assert [s.name for s in graph.services] == ["/a/reset", "/a/change_state"]
+
+
+class TestExtractTfRoles:
+    """Tests for extract_tf_roles()."""
+
+    def test_broadcaster_sets_flag(self):
+        """A node publishing /tf gets tf_broadcaster=True."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/tf",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_a.tf_broadcaster is True
+        assert node_a.tf_listener is False
+        assert node_a.tf_static_broadcaster is False
+        assert graph.topics == []
+
+    def test_static_broadcaster_sets_flag(self):
+        """A node publishing /tf_static gets tf_static_broadcaster=True."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/tf_static",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_a.tf_static_broadcaster is True
+        assert node_a.tf_broadcaster is False
+        assert node_a.tf_listener is False
+        assert graph.topics == []
+
+    def test_listener_sets_flag(self):
+        """A node subscribing /tf gets tf_listener=True."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/tf",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    subscribers=[TopicConnection(node=node_a)],
+                ),
+                Topic(
+                    name="/tf_static",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    subscribers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_a.tf_listener is True
+        assert node_a.tf_broadcaster is False
+        assert node_a.tf_static_broadcaster is False
+        assert graph.topics == []
+
+    def test_all_roles(self):
+        """A node with listener + broadcaster + static broadcaster gets all three flags."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/tf",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    publishers=[TopicConnection(node=node_a)],
+                    subscribers=[TopicConnection(node=node_a)],
+                ),
+                Topic(
+                    name="/tf_static",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    publishers=[TopicConnection(node=node_a)],
+                    subscribers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_a.tf_listener is True
+        assert node_a.tf_broadcaster is True
+        assert node_a.tf_static_broadcaster is True
+        assert graph.topics == []
+
+    def test_multiple_nodes_different_roles(self):
+        """Different nodes get their respective TF roles."""
+        node_broadcaster = _make_node("broadcaster")
+        node_listener = _make_node("listener")
+        node_plain = _make_node("plain")
+        graph = Graph(
+            nodes=[node_broadcaster, node_listener, node_plain],
+            topics=[
+                Topic(
+                    name="/tf",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    publishers=[TopicConnection(node=node_broadcaster)],
+                    subscribers=[TopicConnection(node=node_listener)],
+                ),
+                Topic(
+                    name="/cmd_vel",
+                    msg_type="geometry_msgs/msg/Twist",
+                    publishers=[TopicConnection(node=node_plain)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_broadcaster.tf_broadcaster is True
+        assert node_broadcaster.tf_listener is False
+        assert node_listener.tf_listener is True
+        assert node_listener.tf_broadcaster is False
+        assert node_plain.tf_listener is False
+        assert node_plain.tf_broadcaster is False
+        # /cmd_vel preserved, /tf removed
+        assert [t.name for t in graph.topics] == ["/cmd_vel"]
+
+    def test_preserves_non_tf_topics(self):
+        """Non-TF topics are not removed."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/cmd_vel",
+                    msg_type="geometry_msgs/msg/Twist",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+                Topic(
+                    name="/tf",
+                    msg_type="tf2_msgs/msg/TFMessage",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert [t.name for t in graph.topics] == ["/cmd_vel"]
+
+    def test_ignores_non_tf_msg_type_on_tf_topic(self):
+        """A topic named /tf but with a non-TF message type is not treated as TF."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/tf",
+                    msg_type="std_msgs/msg/String",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_a.tf_broadcaster is False
+        assert [t.name for t in graph.topics] == ["/tf"]
+
+    def test_no_tf_topics_is_noop(self):
+        """A graph with no TF topics is unchanged."""
+        node_a = _make_node("a")
+        graph = Graph(
+            nodes=[node_a],
+            topics=[
+                Topic(
+                    name="/cmd_vel",
+                    msg_type="geometry_msgs/msg/Twist",
+                    publishers=[TopicConnection(node=node_a)],
+                ),
+            ],
+        )
+        extract_tf_roles(graph)
+        assert node_a.tf_listener is False
+        assert node_a.tf_broadcaster is False
+        assert node_a.tf_static_broadcaster is False
+        assert len(graph.topics) == 1

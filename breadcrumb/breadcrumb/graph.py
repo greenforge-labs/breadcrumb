@@ -41,6 +41,10 @@ _SYSTEM_INTERFACE_TYPE_PREFIXES = (
     "type_description_interfaces/",
 )
 
+# TF topics — handled specially as node-local "bubbles" instead of shared topic nodes.
+_TF_TOPIC_NAMES = frozenset({"/tf", "/tf_static"})
+_TF_MSG_TYPE = "tf2_msgs/msg/TFMessage"
+
 
 @dataclass
 class Node:
@@ -55,6 +59,9 @@ class Node:
     node_type: str = "regular"  # "regular" or "composable"
     source_launch_file: Path | None = None
     parameters: dict[str, Any] = field(default_factory=dict)
+    tf_listener: bool = False
+    tf_broadcaster: bool = False
+    tf_static_broadcaster: bool = False
 
 
 @dataclass
@@ -554,6 +561,42 @@ def filter_system_interfaces(graph: Graph) -> None:
         a for a in graph.actions
         if not (_is_system_interface_type(a.action_type) and not (a.servers and a.clients))
     ]
+
+
+def extract_tf_roles(graph: Graph) -> None:
+    """
+    Extract TF roles from /tf and /tf_static topics and set flags on nodes.
+
+    Instead of rendering /tf and /tf_static as shared topic nodes (which creates
+    spaghetti connecting every TF-aware node), we detect each node's TF role and
+    store it as a flag. The serializer then renders these as small bubbles attached
+    to each node independently.
+
+    - Publishing /tf → tf_broadcaster
+    - Publishing /tf_static → tf_static_broadcaster
+    - Subscribing /tf → tf_listener
+
+    Mutates the graph in place: sets Node.tf_* flags and removes TF topics.
+    """
+    remaining_topics = []
+    for topic in graph.topics:
+        if topic.name not in _TF_TOPIC_NAMES or topic.msg_type != _TF_MSG_TYPE:
+            remaining_topics.append(topic)
+            continue
+
+        if topic.name == "/tf":
+            for pub_conn in topic.publishers:
+                pub_conn.node.tf_broadcaster = True
+            for sub_conn in topic.subscribers:
+                sub_conn.node.tf_listener = True
+        elif topic.name == "/tf_static":
+            for pub_conn in topic.publishers:
+                pub_conn.node.tf_static_broadcaster = True
+            # /tf_static subscribers are part of the listener (tf2 buffer
+            # subscribes to both /tf and /tf_static), so we don't set an
+            # additional flag here — tf_listener already covers it.
+
+    graph.topics = remaining_topics
 
 
 def build_graph(

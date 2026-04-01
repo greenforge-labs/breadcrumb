@@ -8,7 +8,7 @@ import warnings
 import click
 from clingwrap.static_info import ComposableNodeInfo, NodeInfo, StaticInformation
 
-from .graph import build_graph, filter_system_interfaces
+from .graph import build_graph, extract_tf_roles, filter_system_interfaces
 from .helpers import (
     LaunchFileSource,
     combine_namespaces,
@@ -137,6 +137,10 @@ def main(launch_files: tuple[Path, ...], output: Path | None, include_hidden: bo
 
     # Build the denormalized graph
     graph = build_graph(all_nodes, include_hidden=include_hidden)
+
+    # Always extract TF roles before filtering — TF topics become node-local
+    # bubbles regardless of the --include-system-interfaces flag.
+    extract_tf_roles(graph)
 
     if not include_system_interfaces:
         filter_system_interfaces(graph)

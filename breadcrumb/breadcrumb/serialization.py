@@ -68,7 +68,7 @@ def serialize_node(node: Node) -> dict[str, Any]:
     Returns:
         Dictionary representation of the node
     """
-    return {
+    result = {
         "fqn": node.fqn,
         "name": node.name,
         "namespace": node.namespace,
@@ -79,6 +79,13 @@ def serialize_node(node: Node) -> dict[str, Any]:
         "source_launch_file": str(node.source_launch_file) if node.source_launch_file else None,
         "parameters": node.parameters,
     }
+    if node.tf_listener or node.tf_broadcaster or node.tf_static_broadcaster:
+        result["tf"] = {
+            "listener": node.tf_listener,
+            "broadcaster": node.tf_broadcaster,
+            "static_broadcaster": node.tf_static_broadcaster,
+        }
+    return result
 
 
 def serialize_topic_connection(conn: TopicConnection) -> dict[str, Any]:
@@ -250,6 +257,36 @@ def _action_serve_edge(srv_id: str, act_id: str) -> str:
     return f'"{act_id}" -> "{srv_id}" [label="served by", style=dotted];'
 
 
+def _tf_bubble_attrs(bubble_id: str, label: str, fillcolor: str) -> str:
+    """Generate DOT node attributes for a TF role bubble."""
+    escaped_label = _escape_dot_label(label)
+    return (
+        f'"{bubble_id}" [label="{escaped_label}", shape=ellipse, '
+        f"style=filled, fillcolor={fillcolor}, fontsize=9, width=0.6, height=0.3];"
+    )
+
+
+def _tf_bubble_edge(node_id: str, bubble_id: str) -> str:
+    """Generate a thin edge from a node to its TF bubble."""
+    return f'"{node_id}" -> "{bubble_id}" [arrowhead=none, style=solid, color=grey, penwidth=0.5];'
+
+
+def _emit_tf_bubbles(lines: list[str], node_id: str, node: Node, indent: str = "    ") -> None:
+    """Append TF bubble nodes and edges for a node to the DOT lines."""
+    if node.tf_listener:
+        bid = f"{node_id}__tf_listener"
+        lines.append(f"{indent}{_tf_bubble_attrs(bid, 'TF Listener', 'plum')}")
+        lines.append(f"{indent}{_tf_bubble_edge(node_id, bid)}")
+    if node.tf_broadcaster:
+        bid = f"{node_id}__tf_broadcaster"
+        lines.append(f"{indent}{_tf_bubble_attrs(bid, 'TF Broadcaster', 'lightsalmon')}")
+        lines.append(f"{indent}{_tf_bubble_edge(node_id, bid)}")
+    if node.tf_static_broadcaster:
+        bid = f"{node_id}__tf_static_broadcaster"
+        lines.append(f"{indent}{_tf_bubble_attrs(bid, 'TF Static Pub', 'peachpuff')}")
+        lines.append(f"{indent}{_tf_bubble_edge(node_id, bid)}")
+
+
 def _categorize_entities_by_node(
     graph: Graph,
 ) -> tuple[
@@ -373,6 +410,9 @@ def serialize_to_dot(graph: Graph) -> str:
                 act_id = _escape_dot_label(action.name)
                 label = f"{action.name}\\n[{action.action_type}]"
                 lines.append(f"    {_action_node_attrs(act_id, label)}")
+
+        # Add TF role bubbles
+        _emit_tf_bubbles(lines, node_id, node, indent="    ")
 
         lines.append("  }")
         lines.append("")
@@ -665,6 +705,15 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
                     label = f"{action.name}\\n[{action.action_type}]"
                     lines.append(f"    {_action_node_attrs(act_id, label)}")
 
+            # Add TF bubbles — aggregate roles across all nodes in the group
+            group_tf = Node(
+                fqn="", name="", namespace=None, package="",
+                tf_listener=any(n.tf_listener for n in group_nodes),
+                tf_broadcaster=any(n.tf_broadcaster for n in group_nodes),
+                tf_static_broadcaster=any(n.tf_static_broadcaster for n in group_nodes),
+            )
+            _emit_tf_bubbles(lines, group_id, group_tf, indent="    ")
+
             lines.append("  }")
             lines.append("")
 
@@ -676,6 +725,7 @@ def _generate_toplevel_graph(graph: Graph, groups: dict[str | None, list[Node]])
             node_id = _escape_dot_label(node.fqn)
             label = f"{node.fqn}\\n({node.package})"
             lines.append(f'  {_ros_node_attrs(node_id, label, "lightyellow")}')
+            _emit_tf_bubbles(lines, node_id, node, indent="  ")
 
         lines.append("")
 
@@ -882,6 +932,7 @@ def _generate_group_graph(graph: Graph, group_name: str | None, group_nodes: lis
         node_id = _escape_dot_label(node.fqn)
         label = f"{node.fqn}\\n({node.package})"
         lines.append(f"    {_ros_node_attrs(node_id, label)}")
+        _emit_tf_bubbles(lines, node_id, node, indent="    ")
 
     # Add internal topics inside cluster
     if internal_topics:
